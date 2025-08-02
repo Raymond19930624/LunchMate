@@ -8,34 +8,31 @@
  */
 
 import { google, type sheets_v4 } from 'googleapis';
-import fs from 'fs';
-import path from 'path';
 
 // This is the scope required for reading and writing to Google Sheets.
 const SCOPES = ['https://www.googleapis.com/auth/spreadsheets'];
 
 /**
  * Authenticates with the Google Sheets API using a service account.
- * The service account credentials are automatically sourced from an
- * environment variable or a local .env file.
+ * The service account credentials are sourced from the
+ * `GOOGLE_SERVICE_ACCOUNT` environment variable.
  * @returns {Promise<any>} The authenticated Google Sheets API client.
  */
 export async function getAuthenticatedClient() {
-  const credentialsPath = path.join(process.cwd(), 'google-credentials.json');
-  if (!fs.existsSync(credentialsPath)) {
-      throw new Error("找不到 'google-credentials.json' 檔案。請確認此檔案位於專案根目錄。");
+  const credentialsContent = process.env.GOOGLE_SERVICE_ACCOUNT;
+  if (!credentialsContent) {
+      throw new Error("找不到 'GOOGLE_SERVICE_ACCOUNT' 環境變數。請在 Vercel 專案設定中加入此變數，其內容為服務帳戶 JSON。");
   }
 
-  const credentialsContent = fs.readFileSync(credentialsPath, 'utf-8');
   let credentials;
   try {
       credentials = JSON.parse(credentialsContent);
   } catch (e) {
-      throw new Error("無法解析 'google-credentials.json' 檔案。請確認其內容為有效的 JSON 格式。");
+      throw new Error("無法解析 'GOOGLE_SERVICE_ACCOUNT' 環境變數。請確認其內容為有效的 JSON 格式。");
   }
-  
+
   if (!credentials.client_email || !credentials.private_key) {
-      throw new Error("'google-credentials.json' 檔案內容不完整，缺少 'client_email' 或 'private_key' 欄位。");
+      throw new Error("'GOOGLE_SERVICE_ACCOUNT' 環境變數內容不完整，缺少 'client_email' 或 'private_key' 欄位。");
   }
 
   const auth = new google.auth.GoogleAuth({
@@ -44,7 +41,7 @@ export async function getAuthenticatedClient() {
   });
   
   const authClient = await auth.getClient();
-  return google.sheets({ version: 'v4', auth: authClient });
+  return google.sheets({ version: 'v4', auth: authClient as any });
 }
 
 /**
