@@ -1,0 +1,38 @@
+{
+  "node": {
+    "405f8722de7072c86f977981403ecd13e738b1ae5b": {
+      "workers": {
+        "app/admin/orders/[dailyOrderId]/page": {
+          "moduleId": "[project]/.next-internal/server/app/admin/orders/[dailyOrderId]/page/actions.js { ACTIONS_MODULE0 => \"[project]/src/ai/flows/order-flow.ts [app-rsc] (ecmascript)\" } [app-rsc] (server actions loader, ecmascript)",
+          "async": false
+        }
+      },
+      "layer": {
+        "app/admin/orders/[dailyOrderId]/page": "action-browser"
+      }
+    },
+    "405e59ce92b3df78ceb45b9c792ff9dddda7d9accf": {
+      "workers": {
+        "app/admin/orders/[dailyOrderId]/page": {
+          "moduleId": "[project]/.next-internal/server/app/admin/orders/[dailyOrderId]/page/actions.js { ACTIONS_MODULE0 => \"[project]/src/ai/flows/order-flow.ts [app-rsc] (ecmascript)\" } [app-rsc] (server actions loader, ecmascript)",
+          "async": false
+        }
+      },
+      "layer": {
+        "app/admin/orders/[dailyOrderId]/page": "action-browser"
+      }
+    },
+    "4066d1b1b4713aa5bd03c1ad83a8c05a727d5e03c3": {
+      "workers": {
+        "app/admin/orders/[dailyOrderId]/page": {
+          "moduleId": "[project]/.next-internal/server/app/admin/orders/[dailyOrderId]/page/actions.js { ACTIONS_MODULE0 => \"[project]/src/ai/flows/order-flow.ts [app-rsc] (ecmascript)\" } [app-rsc] (server actions loader, ecmascript)",
+          "async": false
+        }
+      },
+      "layer": {
+        "app/admin/orders/[dailyOrderId]/page": "action-browser"
+      }
+    }
+  },
+  "edge": {}
+}

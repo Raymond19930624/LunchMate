@@ -1,0 +1,94 @@
+{
+  "node": {
+    "0065b541b767a4ba80dd72c1f63771e795d33e1c5a": {
+      "workers": {
+        "app/page": {
+          "moduleId": "[project]/.next-internal/server/app/page/actions.js { ACTIONS_MODULE0 => \"[project]/src/ai/flows/config-flow.ts [app-rsc] (ecmascript)\" } [app-rsc] (server actions loader, ecmascript)",
+          "async": false
+        }
+      },
+      "layer": {
+        "app/page": "action-browser"
+      }
+    },
+    "40813dcfe73674ebdeb22b03e0df3206e666b1263f": {
+      "workers": {
+        "app/page": {
+          "moduleId": "[project]/.next-internal/server/app/page/actions.js { ACTIONS_MODULE0 => \"[project]/src/ai/flows/config-flow.ts [app-rsc] (ecmascript)\" } [app-rsc] (server actions loader, ecmascript)",
+          "async": false
+        }
+      },
+      "layer": {
+        "app/page": "action-browser"
+      }
+    },
+    "408805d9ef728acadaca549924fae0fa1cec57f9b9": {
+      "workers": {
+        "app/admin/menu/[vendorId]/page": {
+          "moduleId": "[project]/.next-internal/server/app/admin/menu/[vendorId]/page/actions.js { ACTIONS_MODULE0 => \"[project]/src/ai/flows/menu-flow.ts [app-rsc] (ecmascript)\" } [app-rsc] (server actions loader, ecmascript)",
+          "async": false
+        }
+      },
+      "layer": {
+        "app/admin/menu/[vendorId]/page": "action-browser"
+      }
+    },
+    "40a07cd863198c77f598c8ed541dd16aa8d2fca557": {
+      "workers": {
+        "app/admin/menu/[vendorId]/page": {
+          "moduleId": "[project]/.next-internal/server/app/admin/menu/[vendorId]/page/actions.js { ACTIONS_MODULE0 => \"[project]/src/ai/flows/menu-flow.ts [app-rsc] (ecmascript)\" } [app-rsc] (server actions loader, ecmascript)",
+          "async": false
+        }
+      },
+      "layer": {
+        "app/admin/menu/[vendorId]/page": "action-browser"
+      }
+    },
+    "40c94c095377187d2ed2463238dddbeb5912ed8b69": {
+      "workers": {
+        "app/admin/menu/[vendorId]/page": {
+          "moduleId": "[project]/.next-internal/server/app/admin/menu/[vendorId]/page/actions.js { ACTIONS_MODULE0 => \"[project]/src/ai/flows/menu-flow.ts [app-rsc] (ecmascript)\" } [app-rsc] (server actions loader, ecmascript)",
+          "async": false
+        }
+      },
+      "layer": {
+        "app/admin/menu/[vendorId]/page": "action-browser"
+      }
+    },
+    "40dfee3107286cb3b684d1c0f08025db31158a006e": {
+      "workers": {
+        "app/admin/menu/[vendorId]/page": {
+          "moduleId": "[project]/.next-internal/server/app/admin/menu/[vendorId]/page/actions.js { ACTIONS_MODULE0 => \"[project]/src/ai/flows/menu-flow.ts [app-rsc] (ecmascript)\" } [app-rsc] (server actions loader, ecmascript)",
+          "async": false
+        }
+      },
+      "layer": {
+        "app/admin/menu/[vendorId]/page": "action-browser"
+      }
+    },
+    "400d5d098fb5d3b9d2f05a8f3e245c29f34a823284": {
+      "workers": {
+        "app/admin/menu/[vendorId]/page": {
+          "moduleId": "[project]/.next-internal/server/app/admin/menu/[vendorId]/page/actions.js { ACTIONS_MODULE0 => \"[project]/src/ai/flows/menu-flow.ts [app-rsc] (ecmascript)\" } [app-rsc] (server actions loader, ecmascript)",
+          "async": false
+        }
+      },
+      "layer": {
+        "app/admin/menu/[vendorId]/page": "action-browser"
+      }
+    },
+    "40b30050c957649fa04667f1048a25baa031a9f06f": {
+      "workers": {
+        "app/admin/menu/[vendorId]/page": {
+          "moduleId": "[project]/.next-internal/server/app/admin/menu/[vendorId]/page/actions.js { ACTIONS_MODULE0 => \"[project]/src/ai/flows/menu-flow.ts [app-rsc] (ecmascript)\" } [app-rsc] (server actions loader, ecmascript)",
+          "async": false
+        }
+      },
+      "layer": {
+        "app/admin/menu/[vendorId]/page": "action-browser"
+      }
+    }
+  },
+  "edge": {},
+  "encryptionKey": "EsyANage0tOOZY6LvZ8SBODrCkUtRmZZsz/KiwbBE6E="
+}
