@@ -3,7 +3,7 @@ import './globals.css';
 import { Toaster } from "@/components/ui/toaster";
 
 export const metadata: Metadata = {
-  title: '午餐夥伴',
+  title: '餓了嗎？',
   description: '餓了嗎？今天吃什麼？',
 };
 

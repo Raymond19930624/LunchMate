@@ -53,7 +53,7 @@ var __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$components$2f$ui$2f$t
 ;
 ;
 const metadata = {
-    title: '午餐夥伴',
+    title: '餓了嗎？',
     description: '餓了嗎？今天吃什麼？'
 };
 function RootLayout({ children }) {
