@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useEffect } from 'react';
-import { useSearchParams } from 'next/navigation';
 import { getVendors, type Vendor } from '@/ai/flows/vendor-flow';
 import { type DailyOrder, getAllDailyOrders } from '@/ai/flows/order-flow';
 import { AddNewVendorCard } from '@/components/admin/AddNewVendorCard';
@@ -15,7 +14,7 @@ export function AdminContent() {
   const [publishedOrders, setPublishedOrders] = useState<DailyOrder[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const router = useRouter();
-  const searchParams = useSearchParams();
+  // Search parameters are now handled by SearchParamsProvider
 
   const fetchData = async () => {
     setIsLoading(true);
