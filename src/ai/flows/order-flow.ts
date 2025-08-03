@@ -17,6 +17,7 @@ export type DailyOrder = {
     vendorId: string;
     vendorName?: string; // Optional: for display on admin page
     deadline: string;
+    status?: 'pending' | 'confirmed' | 'cancelled'; // 訂單狀態
 };
 
 // This type is for the user-facing order page
