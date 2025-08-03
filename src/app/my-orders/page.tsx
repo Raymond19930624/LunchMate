@@ -1,6 +1,10 @@
-import { Suspense } from 'react';
+'use client';
+
+import { Suspense, useEffect } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import dynamic from 'next/dynamic';
 import ClientSiteHeader from '@/components/ClientSiteHeader';
+import { Loader2 } from 'lucide-react';
 
 // 動態導入 MyOrdersClient 組件，確保在客戶端加載
 const MyOrdersClient = dynamic(
@@ -21,7 +25,6 @@ const MyOrdersClient = dynamic(
   }
 );
 
-// 創建 SearchParamsWrapper 組件來處理 useSearchParams
 export default function MyOrdersPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -35,17 +38,17 @@ export default function MyOrdersPage() {
   
   if (!username) {
     return (
-       <div className="flex min-h-screen items-center justify-center">
-          <Loader2 className="h-8 w-8 animate-spin text-primary" />
-       </div>
-    )
+      <div className="flex min-h-screen items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    );
   }
   
   return (
     <div className="min-h-screen bg-background font-body text-foreground">
       <ClientSiteHeader />
       <main className="container mx-auto max-w-2xl p-4 sm:p-6 lg:p-8">
-         <h1 className="font-headline text-3xl font-bold mb-6">我的訂單</h1>
+        <h1 className="font-headline text-3xl font-bold mb-6">我的訂單</h1>
         <Suspense fallback={
           <div className="container mx-auto px-4 py-8">
             <div className="animate-pulse space-y-6">
@@ -60,52 +63,6 @@ export default function MyOrdersPage() {
           <MyOrdersClient username={username} />
         </Suspense>
       </main>
-                )}
-            </CardContent>
-            <CardFooter className="bg-muted/50 p-4 flex justify-end items-baseline">
-                <span className="text-sm mr-2 text-muted-foreground">總計</span>
-                <span className="font-headline text-2xl font-bold">${total}</span>
-            </CardFooter>
-          </Card>
-        );
-      })}
     </div>
   );
-}
-
-
-export default function MyOrdersPage() {
-    const router = useRouter();
-    const searchParams = useSearchParams();
-    const username = searchParams.get('username');
-
-    useEffect(() => {
-        if (!username) {
-            router.push('/');
-        }
-    }, [username, router]);
-    
-    if (!username) {
-        return (
-             <div className="flex min-h-screen items-center justify-center">
-                <Loader2 className="h-8 w-8 animate-spin text-primary" />
-             </div>
-        )
-    }
-    
-    return (
-        <div className="min-h-screen bg-background font-body text-foreground">
-            <SiteHeader />
-            <main className="container mx-auto max-w-2xl p-4 sm:p-6 lg:p-8">
-                 <h1 className="font-headline text-3xl font-bold mb-6">我的訂單</h1>
-                <Suspense fallback={
-                    <div className="flex justify-center items-center h-64">
-                        <Loader2 className="h-8 w-8 animate-spin text-primary" />
-                    </div>
-                }>
-                    <MyOrdersContent />
-                </Suspense>
-            </main>
-        </div>
-    )
 }
