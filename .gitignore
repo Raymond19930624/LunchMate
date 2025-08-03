@@ -1,0 +1,35 @@
+# 環境變數
+!.env
+.env.local
+.env.development
+.env.production
+!.env.example
+
+# 敏感資訊
+google-credentials.json
+*.pem
+*.key
+
+# 依賴目錄
+node_modules/
+.next/
+out/
+
+# 日誌
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# 系統檔案
+.DS_Store
+Thumbs.db
+
+# IDE 設定
+.vscode/
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
