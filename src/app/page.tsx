@@ -158,7 +158,7 @@ export default function LoginPage() {
                 <UtensilsCrossed className="h-8 w-8 text-primary" />
             </div>
             <CardTitle className="font-headline text-3xl">餓了嗎？</CardTitle>
-            <CardDescription>日常的飢餓管理中心</CardDescription>
+            <CardDescription>日常飢餓管理中心</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <Input

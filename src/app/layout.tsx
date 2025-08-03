@@ -3,8 +3,8 @@ import './globals.css';
 import { Toaster } from "@/components/ui/toaster";
 
 export const metadata: Metadata = {
-  title: '午餐夥伴',
-  description: '餓了嗎？今天吃什麼？',
+  title: '餓了嗎？',
+  description: '餓了嗎？日常的飢餓管理中心',
 };
 
 export default function RootLayout({
