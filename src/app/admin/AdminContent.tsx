@@ -65,6 +65,7 @@ export function AdminContent() {
   const [vendors, setVendors] = useState<Vendor[]>([]);
   const [publishedOrders, setPublishedOrders] = useState<DailyOrder[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [isMounted, setIsMounted] = useState(false);
   const router = useRouter();
   // Search parameters are now handled by SearchParamsProvider
 
@@ -85,6 +86,7 @@ export function AdminContent() {
   };
 
   useEffect(() => {
+    setIsMounted(true);
     fetchData();
   }, []);
 
@@ -94,7 +96,7 @@ export function AdminContent() {
   };
 
   // 確保在客戶端渲染
-  if (typeof window === 'undefined') {
+  if (!isMounted) {
     return null;
   }
 

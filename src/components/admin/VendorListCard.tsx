@@ -6,7 +6,7 @@ import Link from 'next/link';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
-import { Trash2, Edit, Copy } from 'lucide-react';
+import { Trash2, Edit, Copy, Store } from 'lucide-react';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -77,7 +77,10 @@ export function VendorListCard({ initialVendors, onVendorsChange }: VendorListCa
         <section>
             <Card>
                 <CardHeader>
-                    <CardTitle>店家列表</CardTitle>
+                    <CardTitle className="flex items-center gap-2">
+                        <Store className="h-6 w-6" />
+                        <span>店家列表</span>
+                    </CardTitle>
                     <CardDescription>管理現有的店家及菜單。</CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-4">
@@ -132,7 +135,13 @@ export function VendorListCard({ initialVendors, onVendorsChange }: VendorListCa
                                             </AlertDialogHeader>
                                             <AlertDialogFooter>
                                                 <AlertDialogCancel>取消</AlertDialogCancel>
-                                                <AlertDialogAction variant="destructive" onClick={() => handleDeleteVendor(vendor.vendorId, vendor.vendorName)} disabled={isPending}>確定刪除</AlertDialogAction>
+                                                <AlertDialogAction 
+                                                    className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                                                    onClick={() => handleDeleteVendor(vendor.vendorId, vendor.vendorName)} 
+                                                    disabled={isPending}
+                                                >
+                                                    確定刪除
+                                                </AlertDialogAction>
                                             </AlertDialogFooter>
                                         </AlertDialogContent>
                                     </AlertDialog>
