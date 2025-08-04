@@ -123,34 +123,61 @@ export function MyOrdersClient({ username }: MyOrdersClientProps) {
   }
 
   return (
-    <div className="container mx-auto px-4 py-8">
-      <div className="flex items-center justify-between mb-6">
-        <h1 className="text-2xl font-bold">我的訂單</h1>
-        <Button variant="outline" onClick={refreshOrders} disabled={isPending}>
-          {isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-          重新整理
+    <div className="container mx-auto px-4 py-1">
+      <div className="flex justify-end mb-3">
+        <Button 
+          variant="outline" 
+          size="sm"
+          onClick={refreshOrders} 
+          disabled={isPending}
+          className="gap-2 text-sm h-9 px-4 font-medium rounded-lg border-2 border-primary/20 bg-primary/5 hover:bg-primary/10 hover:border-primary/30 text-foreground transition-all duration-200 shadow-sm hover:shadow"
+        >
+          {isPending ? (
+            <Loader2 className="h-4 w-4 animate-spin text-primary" />
+          ) : (
+            <svg 
+              xmlns="http://www.w3.org/2000/svg" 
+              width="16" 
+              height="16" 
+              viewBox="0 0 24 24" 
+              fill="none" 
+              stroke="currentColor" 
+              strokeWidth="2" 
+              strokeLinecap="round" 
+              strokeLinejoin="round" 
+              className="h-4 w-4 text-primary"
+            >
+              <path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"></path>
+              <path d="M3 3v5h5"></path>
+              <path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16"></path>
+              <path d="M16 16h5v5"></path>
+            </svg>
+          )}
+          <span className="text-foreground/90">重新整理</span>
         </Button>
       </div>
 
-      <div className="space-y-6">
+      <div className="space-y-4">
         {orders.map((orderGroup) => {
           const { dailyOrder, items, total, notes } = orderGroup;
           const deadlinePassed = isDeadlinePassed(dailyOrder.deadline);
+          const orderDate = new Date(dailyOrder.date);
           
           return (
-            <Card key={dailyOrder.id} className="overflow-hidden">
-              <CardHeader className="bg-muted/50">
+            <Card key={dailyOrder.id} className="overflow-hidden border-border/50 shadow-sm hover:shadow-md transition-shadow">
+              <CardHeader className="bg-gradient-to-r from-muted/10 to-muted/20 p-4 border-b">
                 <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
-                  <div>
-                    <CardTitle className="text-lg">{dailyOrder.vendorName || '未知商家'}</CardTitle>
-                    <CardDescription className="mt-1">
-                      {new Date(dailyOrder.date).toLocaleDateString('zh-TW', {
-                        year: 'numeric',
-                        month: 'long',
-                        day: 'numeric',
-                        weekday: 'long',
-                      })}
-                    </CardDescription>
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-2">
+                      <h3 className="text-lg font-semibold text-foreground">{dailyOrder.vendorName || '未知商家'}</h3>
+                      <span className="text-sm text-muted-foreground">
+                        {orderDate.toLocaleDateString('zh-TW', {
+                          month: '2-digit',
+                          day: '2-digit',
+                          weekday: 'short',
+                        })}
+                      </span>
+                    </div>
                   </div>
                   <div className="flex items-center gap-2">
                     {deadlinePassed ? (

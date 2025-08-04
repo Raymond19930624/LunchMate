@@ -20,6 +20,7 @@ export type OrderItem = {
   vendorId: string;
   username: string;
   options: Record<string, string>;
+  selectedOptions?: Record<string, string>;
   notes: string;
 };
 
@@ -34,22 +35,39 @@ export type FinalOrder = {
 
 interface OrderSummaryProps {
   order: OrderItem[];
-  username: string;
   onUpdateQuantity: (itemId: string, quantity: number) => void;
+  onRemoveItem: (itemId: string) => void;
   onSubmit: (finalOrder: Omit<FinalOrder, 'dailyOrderId'>) => void;
+  onClear: () => void;
+  isSubmitting?: boolean;
+  selectedOrder: any | null;
+  username: string;
+  notes: string;
+  setNotes: (notes: string) => void;
+  isEditMode?: boolean;
   disabled?: boolean;
-  isEditing?: boolean;
 }
 
-export function OrderSummary({ order, username, onUpdateQuantity, onSubmit, disabled = false, isEditing = false }: OrderSummaryProps) {
-  const [notes, setNotes] = useState('');
-
+export function OrderSummary({ 
+  order, 
+  username, 
+  onUpdateQuantity, 
+  onRemoveItem,
+  onSubmit, 
+  onClear, 
+  isSubmitting = false, 
+  selectedOrder, 
+  notes, 
+  setNotes, 
+  isEditMode = false, 
+  disabled = false 
+}: OrderSummaryProps) {
   // When the component receives an existing order for editing, update the notes field.
   useEffect(() => {
-      if (isEditing && order.length > 0 && order[0].notes) {
+      if (isEditMode && order.length > 0 && order[0].notes) {
           setNotes(order[0].notes);
       }
-  }, [isEditing, order]);
+  }, [isEditMode, order, setNotes]);
 
   const total = useMemo(() => {
     return order.reduce((sum, item) => sum + item.price * item.quantity, 0);
@@ -64,16 +82,21 @@ export function OrderSummary({ order, username, onUpdateQuantity, onSubmit, disa
   }, [order]);
   
   const handleSubmit = () => {
-      if (disabled) return;
-      const finalOrder: Omit<FinalOrder, 'dailyOrderId'> = {
-          username,
-          vendorId,
-          vendorName,
-          notes,
-          items: order.map(({ vendorName, vendorId, username, ...item }) => ({...item, notes: notes})) // ensure notes are consistent for all items
-      };
-      onSubmit(finalOrder);
-      setNotes('');
+    if (disabled) return;
+    
+    // 確保所有項目都有正確的 vendorId 和 vendorName
+    const finalOrder: Omit<FinalOrder, 'dailyOrderId'> = {
+      username,
+      vendorId,
+      vendorName,
+      notes: notes.trim(),
+      items: order.map(({ vendorName, vendorId, username, ...item }) => ({
+        ...item,
+        notes: notes.trim()
+      }))
+    };
+    
+    onSubmit(finalOrder);
   }
 
   return (
@@ -81,8 +104,8 @@ export function OrderSummary({ order, username, onUpdateQuantity, onSubmit, disa
       <CardHeader className="pb-4">
         <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
-                {isEditing ? <Edit className="h-7 w-7 text-accent" /> : <NotebookPen className={cn("h-7 w-7 text-accent", disabled && "text-muted-foreground")} />}
-                <CardTitle className="font-headline text-2xl">{isEditing ? '修改訂單' : '我的訂單'}</CardTitle>
+                {isEditMode ? <Edit className="h-7 w-7 text-accent" /> : <NotebookPen className={cn("h-7 w-7 text-accent", disabled && "text-muted-foreground")} />}
+                <CardTitle className="font-headline text-2xl">{isEditMode ? '修改訂單' : '我的訂單'}</CardTitle>
             </div>
             {username && <span className="font-body text-sm font-medium text-muted-foreground">訂購人: {username}</span>}
         </div>
@@ -101,38 +124,104 @@ export function OrderSummary({ order, username, onUpdateQuantity, onSubmit, disa
               {order.map((item) => (
                 <div key={item.id} className="flex items-start justify-between font-body text-sm">
                   <div className="flex-1">
-                    <p className="font-medium">{item.name}</p>
-                    <div className="text-xs text-muted-foreground">
-                        {Object.entries(item.options).map(([key, value]) => (
-                            <span key={key} className="mr-2">{key}: {value}</span>
-                        ))}
+                    <div className="flex items-start justify-between">
+                      <p className="font-medium">{item.name}</p>
+                      <span className="font-mono ml-2">${item.price.toLocaleString()} x {item.quantity}</span>
                     </div>
-                    <p className="text-muted-foreground">${item.price}</p>
+                    
+                    {Object.keys(item.options).length > 0 && (
+                      <div className="mt-1 text-xs text-muted-foreground">
+                        {Object.entries(item.options).map(([key, value]) => (
+                          <div key={key} className="flex">
+                            <span className="text-muted-foreground/80">{key}:</span>
+                            <span className="ml-1">{value}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    
+                    {item.notes && (
+                      <div className="mt-1 text-xs text-muted-foreground italic">
+                        備註: {item.notes}
+                      </div>
+                    )}
                   </div>
-                  <div className="flex items-center gap-2">
-                    <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => onUpdateQuantity(item.id, item.quantity - 1)} aria-label={`減少 ${item.name} 數量`} disabled={disabled}>
+                  
+                  <div className="flex items-center gap-1 ml-2">
+                    <Button 
+                      variant="ghost" 
+                      size="icon" 
+                      className="h-7 w-7 text-muted-foreground hover:text-foreground" 
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onUpdateQuantity(item.id, item.quantity - 1);
+                      }} 
+                      aria-label={`減少 ${item.name} 數量`} 
+                      disabled={disabled}
+                    >
                       <MinusCircle className="h-4 w-4" />
                     </Button>
-                    <span className="w-6 text-center font-mono">{item.quantity}</span>
-                    <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => onUpdateQuantity(item.id, item.quantity + 1)} aria-label={`增加 ${item.name} 數量`} disabled={disabled}>
+                    
+                    <span className="w-6 text-center font-mono text-sm">
+                      {item.quantity}
+                    </span>
+                    
+                    <Button 
+                      variant="ghost" 
+                      size="icon" 
+                      className="h-7 w-7 text-muted-foreground hover:text-foreground" 
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onUpdateQuantity(item.id, item.quantity + 1);
+                      }} 
+                      aria-label={`增加 ${item.name} 數量`} 
+                      disabled={disabled}
+                    >
                       <PlusCircle className="h-4 w-4" />
                     </Button>
-                    <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive/70 hover:text-destructive" onClick={() => onUpdateQuantity(item.id, 0)} aria-label={`移除 ${item.name}`} disabled={disabled}>
+                    
+                    <Button 
+                      variant="ghost" 
+                      size="icon" 
+                      className="h-7 w-7 text-destructive/70 hover:text-destructive" 
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onRemoveItem(item.id);
+                      }} 
+                      aria-label={`移除 ${item.name}`} 
+                      disabled={disabled}
+                    >
                       <Trash2 className="h-4 w-4" />
                     </Button>
                   </div>
                 </div>
               ))}
             </div>
-            <Separator />
-             <div className="space-y-2">
-                <Label htmlFor="order-notes">訂單備註 (選填)</Label>
-                <Textarea id="order-notes" value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="例如: 不要辣、餐具一份" disabled={disabled} />
-            </div>
-            <Separator />
-            <div className="flex justify-between font-bold text-lg font-headline">
-              <span>總計</span>
-              <span>${total.toLocaleString()}</span>
+            <Separator className="my-3" />
+            
+            <div className="space-y-3">
+              <div className="space-y-2">
+                <Label htmlFor="order-notes" className="text-sm font-medium">訂單備註 (選填)</Label>
+                <Textarea 
+                  id="order-notes" 
+                  value={notes} 
+                  onChange={(e) => setNotes(e.target.value)} 
+                  placeholder="例如: 不要辣、餐具一份" 
+                  disabled={disabled}
+                  className="min-h-[80px] text-sm"
+                />
+              </div>
+              
+              <div className="space-y-2 pt-2">
+                <div className="flex justify-between text-sm text-muted-foreground">
+                  <span>小計</span>
+                  <span>${total.toLocaleString()}</span>
+                </div>
+                <div className="flex justify-between text-sm">
+                  <span className="font-medium">總計</span>
+                  <span className="font-bold text-lg text-foreground">${total.toLocaleString()}</span>
+                </div>
+              </div>
             </div>
           </div>
         )}
@@ -143,7 +232,7 @@ export function OrderSummary({ order, username, onUpdateQuantity, onSubmit, disa
           disabled={order.length === 0 || disabled}
           onClick={handleSubmit}
         >
-          {disabled ? "已截止" : (isEditing ? '確認修改' : '送出訂單')}
+          {disabled ? "已截止" : (isEditMode ? '確認修改' : '送出訂單')}
         </Button>
       </CardFooter>
     </Card>

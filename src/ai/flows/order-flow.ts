@@ -347,54 +347,100 @@ export async function deleteDailyOrder(dailyOrderId: string): Promise<{ success:
  * @returns {Promise<{success: boolean}>} A success flag.
  */
 export async function submitOrder(order: FinalOrder, isEditing: boolean = false): Promise<{ success: boolean }> {
-    // If editing, first delete all existing items for that user in that daily order
     if (isEditing) {
-        await deleteUserOrder({ username: order.username, dailyOrderId: order.dailyOrderId });
-    }
-    
-    // Then, append the new/updated items
-    const allItemsRange = `${ORDER_ITEMS_SHEET_NAME}!A2:A`;
-    const allItemIdsData = await getSheetData(SPREADSHEET_ID, allItemsRange);
-    let lastIdNum = allItemIdsData.length > 0
-        ? Math.max(0, ...allItemIdsData.map(row => parseInt((row[0] || 'oi0').replace('oi', ''), 10)).filter(num => !isNaN(num)))
-        : 0;
+        // 1. 首先刪除該用戶在該日訂單中的所有現有項目
+        await deleteUserOrder({ 
+            username: order.username, 
+            dailyOrderId: order.dailyOrderId 
+        });
 
-    const now = new Date().toISOString();
-    const orderValues = [];
+        // 2. 如果沒有新的訂單項目，直接返回成功
+        if (order.items.length === 0) {
+            return { success: true };
+        }
 
-    for (const item of order.items) {
-        lastIdNum++; // Increment ID for each item in the loop
-        const newId = `oi${lastIdNum.toString().padStart(3, '0')}`;
-        const optionsString = JSON.stringify(item.options);
+        // 3. 添加新的訂單項目
+        const allItemsRange = `${ORDER_ITEMS_SHEET_NAME}!A2:A`;
+        const allItemIdsData = await getSheetData(SPREADSHEET_ID, allItemsRange);
+        let lastIdNum = allItemIdsData.length > 0
+            ? Math.max(0, ...allItemIdsData.map(row => parseInt((row[0] || 'oi0').replace('oi', ''), 10)).filter(num => !isNaN(num)))
+            : 0;
+        
+        const now = new Date().toISOString();
+        const orderValues = [];
 
-        orderValues.push([
-            newId,
-            order.dailyOrderId,
-            now,
-            order.username,
-            order.vendorId,
-            order.vendorName,
-            item.menuItemId,
-            item.name,
-            item.quantity,
-            item.price,
-            optionsString,
-            order.notes,
-            'FALSE' // isPaid
-        ]);
-    }
-    
-    // Ensure headers exist
-    const headers = await getHeaders(SPREADSHEET_ID, ORDER_ITEMS_SHEET_NAME);
-    if (headers.length === 0) {
-        await updateSheetData(SPREADSHEET_ID, `${ORDER_ITEMS_SHEET_NAME}!A1:M1`, [['id', 'dailyOrderId', 'timestamp', 'username', 'vendorId', 'vendorName', 'menuItemId', 'itemName', 'quantity', 'price', 'options', 'notes', 'isPaid']]);
-    }
+        for (const item of order.items) {
+            lastIdNum++;
+            const newId = `oi${lastIdNum.toString().padStart(3, '0')}`;
+            const optionsString = JSON.stringify(item.options || {});
 
-    if (orderValues.length > 0) {
-        await appendSheetData(SPREADSHEET_ID, `${ORDER_ITEMS_SHEET_NAME}!A:M`, orderValues);
+            orderValues.push([
+                newId,
+                order.dailyOrderId,
+                now,
+                order.username,
+                order.vendorId,
+                order.vendorName,
+                item.menuItemId,
+                item.name,
+                item.quantity,
+                item.price,
+                optionsString,
+                order.notes || '',
+                'FALSE' // isPaid
+            ]);
+        }
+
+        if (orderValues.length > 0) {
+            await appendSheetData(SPREADSHEET_ID, `${ORDER_ITEMS_SHEET_NAME}!A:M`, orderValues);
+        }
+        
+        return { success: true };
+    } else {
+        // 新增訂單的邏輯保持不變
+        const allItemsRange = `${ORDER_ITEMS_SHEET_NAME}!A2:A`;
+        const allItemIdsData = await getSheetData(SPREADSHEET_ID, allItemsRange);
+        let lastIdNum = allItemIdsData.length > 0
+            ? Math.max(0, ...allItemIdsData.map(row => parseInt((row[0] || 'oi0').replace('oi', ''), 10)).filter(num => !isNaN(num)))
+            : 0;
+
+        const now = new Date().toISOString();
+        const orderValues = [];
+
+        for (const item of order.items) {
+            lastIdNum++;
+            const newId = `oi${lastIdNum.toString().padStart(3, '0')}`;
+            const optionsString = JSON.stringify(item.options);
+
+            orderValues.push([
+                newId,
+                order.dailyOrderId,
+                now,
+                order.username,
+                order.vendorId,
+                order.vendorName,
+                item.menuItemId,
+                item.name,
+                item.quantity,
+                item.price,
+                optionsString,
+                order.notes,
+                'FALSE' // isPaid
+            ]);
+        }
+        
+        // Ensure headers exist
+        const headers = await getHeaders(SPREADSHEET_ID, ORDER_ITEMS_SHEET_NAME);
+        if (headers.length === 0) {
+            await updateSheetData(SPREADSHEET_ID, `${ORDER_ITEMS_SHEET_NAME}!A1:M1`, [['id', 'dailyOrderId', 'timestamp', 'username', 'vendorId', 'vendorName', 'menuItemId', 'itemName', 'quantity', 'price', 'options', 'notes', 'isPaid']]);
+        }
+
+        if (orderValues.length > 0) {
+            await appendSheetData(SPREADSHEET_ID, `${ORDER_ITEMS_SHEET_NAME}!A:M`, orderValues);
+        }
+        
+        return { success: true };
     }
-    
-    return { success: true };
 }
 
 
@@ -557,16 +603,22 @@ export async function getOrdersByUsername(username: string): Promise<UserOrderGr
         if (dailyOrder) {
             const items = groupedByDailyOrder[dailyOrderId];
             
-             // Aggregate items with the same menuItemId and options
+             // Aggregate items with the same menuItemId, options, and notes
             const aggregatedItemsMap = items.reduce((acc, item) => {
                 const optionsString = JSON.stringify(item.options || {});
-                const aggregationKey = `${item.menuItemId}|${optionsString}`;
+                // 使用 menuItemId、options 和 notes 作為唯一鍵
+                const aggregationKey = `${item.menuItemId}|${optionsString}|${item.notes || ''}`;
+                
                 if (acc.has(aggregationKey)) {
+                    // 只合併相同菜單項、選項和備註的項目
                     const existingItem = acc.get(aggregationKey)!;
                     existingItem.quantity += item.quantity;
                 } else {
-                    // Create a copy to avoid modifying the original array items
-                    acc.set(aggregationKey, { ...item });
+                    // 創建新項目時確保是深拷貝
+                    acc.set(aggregationKey, { 
+                        ...item,
+                        options: { ...(item.options || {}) } // 確保 options 也是深拷貝
+                    });
                 }
                 return acc;
             }, new Map<string, OrderDetailItem>());

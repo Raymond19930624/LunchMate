@@ -1,8 +1,8 @@
 
 "use client";
 
-import { useState, useCallback, useMemo, useEffect } from "react";
-import { useSearchParams } from 'next/navigation';
+import { useState, useCallback, useMemo, useEffect, useRef } from "react";
+import { useSearchParams, useRouter } from 'next/navigation';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { OrderSummary, type OrderItem, type FinalOrder } from "@/components/OrderSummary";
@@ -18,7 +18,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { type AvailableOrder, submitOrder } from "@/ai/flows/order-flow";
+import { type AvailableOrder, submitOrder, getOrdersByUsername } from "@/ai/flows/order-flow";
 import type { MenuItem } from "@/ai/flows/menu-flow";
 import { parse } from 'date-fns';
 
@@ -64,7 +64,19 @@ const aggregateOrderItems = (items: OrderItem[]): OrderItem[] => {
 
 
 // Component for a single menu item card
-function MenuItemCard({ item, vendorName, vendorId, onAddToOrder }: { item: MenuItem, vendorName: string, vendorId: string, onAddToOrder: (orderDetail: OrderItem) => void }) {
+function MenuItemCard({ 
+  item, 
+  vendorName, 
+  vendorId, 
+  onAddToOrder, 
+  disabled = false 
+}: { 
+  item: MenuItem, 
+  vendorName: string, 
+  vendorId: string, 
+  onAddToOrder: (orderDetail: OrderItem) => void,
+  disabled?: boolean 
+}) {
     const [selections, setSelections] = useState<Record<string, string>>(() => {
         const defaults: Record<string, string> = {};
         item.options?.forEach(group => {
@@ -122,80 +134,217 @@ function MenuItemCard({ item, vendorName, vendorId, onAddToOrder }: { item: Menu
     };
 
     return (
-        <Card className="flex flex-col transition-shadow hover:shadow-xl">
-            <CardHeader className="pb-2">
-                <CardTitle className="font-headline text-xl">{item.name}</CardTitle>
+        <Card className={`overflow-hidden transition-all hover:shadow-md h-full flex flex-col ${disabled ? 'opacity-60' : ''}`}>
+            <CardContent className="p-4 flex-1 flex flex-col">
+                <div className="flex justify-between items-center mb-2">
+                    <h3 className="font-headline font-semibold text-lg">{item.name}</h3>
+                    <span className="font-sans font-bold text-lg text-primary-foreground bg-primary/80 hover:bg-primary/90 transition-colors px-3 py-1 rounded-md">
+                        ${item.price}
+                    </span>
+                </div>
                 {item.description && (
-                  <CardDescription className="font-body pt-1 text-xs">{item.description}</CardDescription>
+                    <p className="text-sm text-muted-foreground mb-3 line-clamp-2">{item.description}</p>
                 )}
-            </CardHeader>
-            <CardContent className="flex-grow space-y-3 pt-2">
-                {item.options?.map(group => (
-                    <div key={group.name} className="space-y-1">
-                        <Label htmlFor={`${item.id}-${group.name}`} className="text-xs text-muted-foreground">{group.name}</Label>
-                        <Select
-                            value={selections[group.name]}
-                            onValueChange={(value) => handleSelectionChange(group.name, value)}
-                        >
-                            <SelectTrigger id={`${item.id}-${group.name}`} className="h-9">
-                                <SelectValue placeholder={`選擇${group.name}`} />
-                            </SelectTrigger>
-                            <SelectContent>
-                                {group.choices.map(choice => (
-                                    <SelectItem key={choice.id} value={choice.name}>
-                                        {choice.name}
-                                        {choice.priceDelta !== 0 && ` (${choice.priceDelta > 0 ? '+' : ''}$${choice.priceDelta})`}
-                                    </SelectItem>
-                                ))}
-                            </SelectContent>
-                        </Select>
+                
+                {item.options && item.options.length > 0 && (
+                    <div className="mt-2 space-y-3 flex-1">
+                        {item.options.map((group) => (
+                            <div key={group.name} className="space-y-1">
+                                <Label className="text-sm font-medium">{group.name}</Label>
+                                <Select
+                                    value={selections[group.name]}
+                                    onValueChange={(value) => handleSelectionChange(group.name, value)}
+                                    disabled={disabled}
+                                >
+                                    <SelectTrigger className="w-full">
+                                        <SelectValue placeholder={`選擇${group.name}`} />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        {group.choices.map((choice) => (
+                                            <SelectItem key={choice.name} value={choice.name}>
+                                                <div className="flex items-center justify-between w-full">
+                                                    <span>{choice.name}</span>
+                                                    {choice.priceDelta !== 0 && (
+                                                        <span className="text-muted-foreground text-xs">
+                                                            {choice.priceDelta > 0 ? '+' : ''}{choice.priceDelta}
+                                                        </span>
+                                                    )}
+                                                </div>
+                                            </SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                        ))}
                     </div>
-                ))}
-            </CardContent>
-            <CardFooter className="flex items-center justify-between bg-muted/50 p-3 mt-auto">
-                 <p className="font-bold text-lg">${item.price}</p>
-                 <div className="flex items-center gap-2">
-                    <Button variant="outline" size="icon" className="h-8 w-8 rounded-full" onClick={() => handleQuantityChange(-1)}><MinusCircle className="h-4 w-4" /></Button>
-                    <span className="w-6 text-center font-bold text-lg">{quantity}</span>
-                    <Button variant="outline" size="icon" className="h-8 w-8 rounded-full" onClick={() => handleQuantityChange(1)}><PlusCircle className="h-4 w-4" /></Button>
-                    <Button onClick={handleAddToCart} size="sm" className="px-3 gap-1">
-                        <ShoppingCart className="h-4 w-4" />
-                        加入
+                )}
+                
+                <div className="mt-4 flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                        <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleQuantityChange(-1)}
+                            className="h-8 w-8 p-0"
+                            disabled={disabled}
+                        >
+                            <MinusCircle className="h-4 w-4" />
+                        </Button>
+                        <span className="w-8 text-center font-medium">{quantity}</span>
+                        <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleQuantityChange(1)}
+                            className="h-8 w-8 p-0"
+                            disabled={disabled}
+                        >
+                            <PlusCircle className="h-4 w-4" />
+                        </Button>
+                    </div>
+                    <Button
+                        onClick={handleAddToCart}
+                        size="sm"
+                        className="ml-auto"
+                        disabled={disabled}
+                    >
+                        {disabled ? '無法新增' : '加入訂單'}
                     </Button>
                 </div>
-            </CardFooter>
+            </CardContent>
         </Card>
     );
 }
 
-export function OrderClient({ availableOrders, menus, initialOrderItems }: { availableOrders: AvailableOrder[], menus: Menu, initialOrderItems?: OrderItem[] }) {
+interface OrderClientProps {
+  availableOrders: AvailableOrder[];
+  menus: Menu;
+  initialOrderItems?: OrderItem[];
+  isEditMode?: boolean;
+  orderIdToEdit?: string;
+}
+
+export function OrderClient({ 
+  availableOrders, 
+  menus, 
+  initialOrderItems = [],
+  isEditMode = false,
+  orderIdToEdit
+}: OrderClientProps) {
+  const searchParams = useSearchParams();
+  const router = useRouter();
+  const { toast } = useToast();
   const [selectedOrder, setSelectedOrder] = useState<AvailableOrder | null>(null);
   const [order, setOrder] = useState<OrderItem[]>([]);
-  const { toast } = useToast();
-  const searchParams = useSearchParams();
   const username = searchParams.get('username') || '匿名';
   const editingOrderId = searchParams.get('edit');
-
+  const [hasExistingOrder, setHasExistingOrder] = useState(false);
+  
   // Hydration-safe state for deadline checking
   const [isPastDeadline, setIsPastDeadline] = useState(false);
+
+  // 使用 useRef 緩存已加載的訂單數據
+  const ordersCache = useRef<Record<string, any>>({});
+  const [isLoadingOrders, setIsLoadingOrders] = useState<Record<string, boolean>>({});
+
+  // 檢查用戶是否已經訂購過
+  useEffect(() => {
+    const checkExistingOrder = async () => {
+      if (!username || !selectedOrder) return;
+      
+      const orderId = selectedOrder.id;
+      
+      // 如果正在加載或已經加載過，則直接返回
+      if (isLoadingOrders[orderId] || ordersCache.current[orderId] !== undefined) {
+        setHasExistingOrder(!!ordersCache.current[orderId]);
+        return;
+      }
+      
+      try {
+        // 設置加載狀態
+        setIsLoadingOrders(prev => ({ ...prev, [orderId]: true }));
+        
+        // 如果沒有緩存，則從 API 獲取數據
+        if (!ordersCache.current[username]) {
+          const orders = await getOrdersByUsername(username);
+          // 緩存所有訂單數據
+          ordersCache.current = {
+            ...ordersCache.current,
+            [username]: orders
+          };
+        }
+        
+        // 從緩存中查找訂單
+        const userOrders = ordersCache.current[username] || [];
+        const existingOrder = userOrders.find(
+          (orderGroup: any) => 
+            orderGroup.dailyOrder && 
+            orderGroup.dailyOrder.id === orderId && 
+            orderGroup.dailyOrder.status !== 'cancelled' &&
+            orderGroup.items.length > 0
+        );
+        
+        // 更新緩存
+        ordersCache.current[orderId] = existingOrder || null;
+        
+        const hasOrder = !!existingOrder;
+        setHasExistingOrder(hasOrder);
+        
+        // 如果是編輯模式，加載現有訂單項目
+        if (existingOrder && isEditMode) {
+          const orderItems = existingOrder.items.map((item: any) => ({
+            id: item.id,
+            menuItemId: item.menuItemId,
+            name: item.itemName,
+            price: item.price,
+            quantity: item.quantity,
+            vendorName: selectedOrder.vendor.vendorName,
+            vendorId: selectedOrder.vendor.vendorId,
+            username: username,
+            options: item.options || {},
+            notes: item.notes || ''
+          }));
+          setOrder(orderItems);
+        }
+      } catch (error) {
+        console.error("檢查訂單時出錯:", error);
+      } finally {
+        // 清除加載狀態
+        setIsLoadingOrders(prev => ({ ...prev, [orderId]: false }));
+      }
+    };
+    
+    if (selectedOrder) {
+      checkExistingOrder();
+    }
+  }, [selectedOrder, username, isEditMode]);
 
   // This effect runs once on mount to set the initial order, aggregating if needed.
   useEffect(() => {
     if (initialOrderItems && initialOrderItems.length > 0) {
-      setOrder(aggregateOrderItems(initialOrderItems));
+      // 在編輯模式下，直接使用 initialOrderItems，不進行聚合
+      setOrder(editingOrderId || isEditMode ? [...initialOrderItems] : aggregateOrderItems(initialOrderItems));
+    } else if (editingOrderId || isEditMode) {
+      // 如果是編輯模式但沒有 initialOrderItems，清空訂單
+      setOrder([]);
     }
-  }, [initialOrderItems]);
-
+  }, [initialOrderItems, editingOrderId, isEditMode]);
 
   // Set initial selected order and calculate deadline status on client
   useEffect(() => {
-    // If we're in editing mode, there will only be one availableOrder. Select it.
-    if (editingOrderId && availableOrders.length === 1) {
-        setSelectedOrder(availableOrders[0]);
-    } else if (availableOrders.length > 0 && !selectedOrder) {
-        setSelectedOrder(availableOrders[0]);
+    // 如果是編輯模式，且提供了 orderIdToEdit，則選擇該訂單
+    if (isEditMode && orderIdToEdit && availableOrders.length > 0) {
+      const orderToEdit = availableOrders.find(order => order.id === orderIdToEdit);
+      if (orderToEdit) {
+        setSelectedOrder(orderToEdit);
+        return;
+      }
     }
-  }, [availableOrders, selectedOrder, editingOrderId]);
+    
+    // 如果不是編輯模式，且有可用的訂單，則選擇第一個
+    if (availableOrders.length > 0 && !selectedOrder) {
+      setSelectedOrder(availableOrders[0]);
+    }
+  }, [availableOrders, selectedOrder, isEditMode, orderIdToEdit]);
   
   useEffect(() => {
     if (selectedOrder) {
@@ -219,60 +368,215 @@ export function OrderClient({ availableOrders, menus, initialOrderItems }: { ava
     setSelectedOrder(orderToSelect);
   }, [order.length, selectedOrder?.vendor.vendorId, toast, editingOrderId]);
   
-  const handleAddToOrder = (orderDetail: OrderItem) => {
+  // 使用 useRef 來追蹤是否需要顯示提示
+  const toastRef = useRef<() => void>();
+  
+  // 使用 useEffect 來處理提示，確保在渲染後執行
+  useEffect(() => {
+    if (toastRef.current) {
+      toastRef.current();
+      toastRef.current = undefined;
+    }
+  });
+
+  const handleAddToOrder = useCallback((orderDetail: OrderItem) => {
     setOrder(prevOrder => {
-        const existingItem = prevOrder.find(oi => oi.id === orderDetail.id);
-        if (existingItem) {
-            return prevOrder.map(oi => 
-                oi.id === orderDetail.id 
-                ? { ...oi, quantity: oi.quantity + orderDetail.quantity } 
-                : oi
-            );
+      try {
+        const isEditing = isEditMode || !!editingOrderId;
+        const usernameDecoded = decodeURIComponent(username);
+        let toastMessage: { title: string; description: string } | null = null;
+        
+        // 檢查是否已存在相同 ID 和選項的項目
+        const existingItemIndex = prevOrder.findIndex(oi => 
+          oi.menuItemId === orderDetail.menuItemId && 
+          JSON.stringify(oi.options) === JSON.stringify(orderDetail.options) &&
+          oi.notes === orderDetail.notes // 同時檢查備註是否相同
+        );
+        
+        const newOrder = [...prevOrder];
+        
+        // 在編輯模式下，直接替換項目；在新增模式下，累加數量
+        if (existingItemIndex >= 0) {
+          if (isEditing) {
+            // 編輯模式：直接替換項目
+            newOrder[existingItemIndex] = { 
+              ...orderDetail, 
+              username: usernameDecoded,
+              id: newOrder[existingItemIndex].id // 保留原始 ID
+            };
+            
+            toastMessage = { 
+              title: "已更新訂單",
+              description: `${orderDetail.quantity} 份 ${orderDetail.name} 已更新`
+            };
+          } else {
+            // 新增模式：累加數量
+            const updatedQuantity = newOrder[existingItemIndex].quantity + orderDetail.quantity;
+            newOrder[existingItemIndex] = {
+              ...newOrder[existingItemIndex],
+              quantity: updatedQuantity
+            };
+            
+            toastMessage = { 
+              title: "已更新數量",
+              description: `${newOrder[existingItemIndex].name} 數量已更新為 ${updatedQuantity} 份`
+            };
+          }
+        } else {
+          // 確保 orderDetail 有有效的 id
+          const itemId = orderDetail.id || `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+          
+          // 添加新項目
+          const newItem = { 
+            ...orderDetail, 
+            id: itemId,
+            username: usernameDecoded
+          };
+          
+          newOrder.push(newItem);
+          
+          toastMessage = { 
+            title: "已新增項目",
+            description: `${orderDetail.quantity} 份 ${orderDetail.name} 已新增` 
+          };
         }
-        return [...prevOrder, { ...orderDetail, username: decodeURIComponent(username) }];
+        
+        // 設置提示訊息，將在 useEffect 中顯示
+        if (toastMessage) {
+          toastRef.current = () => {
+            toast(toastMessage!);
+          };
+        }
+        
+        return newOrder;
+      } catch (error) {
+        console.error("處理訂單項目時發生錯誤:", error);
+        // 設置錯誤提示訊息，將在 useEffect 中顯示
+        toastRef.current = () => {
+          toast({
+            variant: "destructive",
+            title: "發生錯誤",
+            description: "無法新增項目，請稍後再試"
+          });
+        };
+        return prevOrder; // 返回原狀態以避免狀態不一致
+      }
     });
-    toast({ title: "已加入訂單", description: `${orderDetail.quantity} 份 ${orderDetail.name} 已新增至您的訂單。` });
-  };
+  }, [isEditMode, editingOrderId, username]);
 
 
-  const handleUpdateQuantity = useCallback((itemId: string, quantity: number) => {
-    setOrder((prevOrder) => {
-      if (quantity <= 0) {
+  const handleUpdateQuantity = useCallback((itemId: string, newQuantity: number) => {
+    setOrder(prevOrder => {
+      const isEditing = isEditMode || !!editingOrderId;
+      
+      if (newQuantity <= 0) {
+        // 如果數量小於等於 0，從訂單中移除該項目
+        const removedItem = prevOrder.find(item => item.id === itemId);
+        if (removedItem && isEditing) {
+          toast({
+            title: "已移除項目",
+            description: `已從訂單中移除 ${removedItem.name}`,
+            variant: "default"
+          });
+        }
         return prevOrder.filter((item) => item.id !== itemId);
       }
+      
+      // 更新數量
       return prevOrder.map((item) =>
-        item.id === itemId ? { ...item, quantity } : item
+        item.id === itemId 
+          ? { 
+              ...item, 
+              quantity: newQuantity,
+              // 確保 username 被正確設置
+              username: item.username || decodeURIComponent(username)
+            } 
+          : item
       );
     });
-  }, []);
+  }, [isEditMode, editingOrderId, username, toast]);
 
-  const handleSubmitOrder = useCallback(async (finalOrder: FinalOrder) => {
-    if (finalOrder.items.length === 0) {
-       toast({ variant: "destructive", title: "訂單是空的", description: "請先選擇餐點再送出訂單。" });
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  
+  const handleSubmitOrder = useCallback(async (finalOrder: Omit<FinalOrder, 'dailyOrderId'>) => {
+    if (!selectedOrder) {
+      toast({ variant: "destructive", title: "錯誤", description: "請選擇一個有效的訂單" });
       return;
     }
-    if (!selectedOrder) {
-         toast({ variant: "destructive", title: "錯誤", description: "請選擇一個有效的訂單" });
-        return;
+    
+    if (finalOrder.items.length === 0) {
+      toast({ variant: "destructive", title: "訂單是空的", description: "請先選擇餐點再送出訂單。" });
+      return;
     }
     
     try {
-        const isEditing = !!editingOrderId;
-        await submitOrder({
-            ...finalOrder,
-            dailyOrderId: selectedOrder.id
-        }, isEditing);
-        toast({ title: "訂單已送出！", description: "感謝您的訂購，餐點稍後為您送上！" });
-        setOrder([]);
+      setIsSubmitting(true);
+      
+      // 檢查是否為編輯模式（通過 URL 參數或 props）
+      const isEditing = isEditMode || !!editingOrderId;
+      
+      // 準備訂單數據
+      const orderData: FinalOrder = {
+        ...finalOrder,
+        dailyOrderId: isEditing && editingOrderId ? editingOrderId : selectedOrder.id,
+        vendorId: selectedOrder.vendor.vendorId,
+        vendorName: selectedOrder.vendor.vendorName,
+        notes: finalOrder.notes || ''
+      };
+      
+      // 提交訂單
+      await submitOrder(orderData);
+      
+      // 清空購物車
+      setOrder([]);
+      
+      // 更新 hasExistingOrder 狀態
+      setHasExistingOrder(true);
+      
+      // 清除緩存，強制下次重新加載
+      const orderId = selectedOrder.id;
+      delete ordersCache.current[orderId];
+      
+      // 顯示簡潔的成功訊息
+      toast({ 
+        title: isEditing ? "訂單已更新！" : "訂單已送出！", 
+        description: isEditing 
+          ? `已成功更新 ${selectedOrder.vendor.vendorName} 的訂單`
+          : `已成功送出 ${selectedOrder.vendor.vendorName} 的訂單`
+      });
+      
     } catch (error) {
-        toast({
-            variant: "destructive",
-            title: "訂單送出失敗",
-            description: error instanceof Error ? error.message : "發生未知錯誤，請聯繫管理員。",
-        });
+      console.error("訂單提交錯誤:", error);
+      toast({
+        variant: "destructive",
+        title: "送出訂單時發生錯誤",
+        description: error instanceof Error ? error.message : "請稍後再試"
+      });
+    } finally {
+      setIsSubmitting(false);
     }
+  }, [selectedOrder, isEditMode, editingOrderId, submitOrder, setOrder, toast]);
 
-  }, [toast, selectedOrder, editingOrderId]);
+  const handleRemoveItem = useCallback((itemId: string) => {
+    setOrder(prevOrder => {
+      const removedItem = prevOrder.find(item => item.id === itemId);
+      if (!removedItem) return prevOrder;
+      
+      const newOrder = prevOrder.filter(item => item.id !== itemId);
+      const isEditing = isEditMode || !!editingOrderId;
+      
+      // 顯示已移除項目的提示
+      if (isEditing) {
+        toast({
+          title: "已移除項目",
+          description: `已從訂單中移除 ${removedItem.name}`,
+          variant: "default"
+        });
+      }
+      
+      return newOrder;
+    });
+  }, [isEditMode, editingOrderId, toast]);
 
   const selectedMenu = useMemo(() => {
     if (!selectedOrder) return [];
@@ -339,12 +643,20 @@ export function OrderClient({ availableOrders, menus, initialOrderItems }: { ava
           {/* Menu Display */}
           {selectedOrder && (
             <section>
-              <h2 className="font-headline text-2xl font-bold mb-4">{selectedOrder.vendor.vendorName} 菜單</h2>
+              <h2 className="font-headline text-2xl font-bold mb-4">
+                {isEditMode ? '編輯訂單 - ' : ''}{selectedOrder.vendor.vendorName} 菜單
+              </h2>
               {isPastDeadline ? (
                  <Card className="flex flex-col items-center justify-center p-12 text-center text-destructive bg-destructive/10 border-destructive/50">
                     <Ban className="h-16 w-16 mb-4" />
-                    <h3 className="font-headline text-xl font-bold mb-2">今日訂購已截止</h3>
-                    <p className="font-body text-sm">此店家的訂購時間已過，明天請早！</p>
+                    <h3 className="font-headline text-xl font-bold mb-2">訂購已截止</h3>
+                    <p className="font-body text-sm">此店家的訂購時間已過，無法再修改訂單。</p>
+                 </Card>
+              ) : hasExistingOrder && !isEditMode && !editingOrderId ? (
+                 <Card className="flex flex-col items-center justify-center p-12 text-center text-blue-700 bg-blue-50 border-blue-200">
+                    <CheckCircle2 className="h-16 w-16 mb-4 text-blue-600" />
+                    <h3 className="font-headline text-xl font-bold mb-2">您已經訂購過此訂單</h3>
+                    <p className="font-body text-sm">請前往「我的訂單」頁面進行修改</p>
                  </Card>
               ) : (
                  <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-6">
@@ -355,9 +667,10 @@ export function OrderClient({ availableOrders, menus, initialOrderItems }: { ava
                         vendorName={selectedOrder.vendor.vendorName} 
                         vendorId={selectedOrder.vendor.vendorId}
                         onAddToOrder={handleAddToOrder} 
+                        disabled={hasExistingOrder && !isEditMode}
                       />
                     )) : (
-                      <p className="text-sm text-muted-foreground col-span-full">這個店家還沒有任何菜單品項，請管理員新增。</p>
+                      <p className="text-sm text-muted-foreground col-span-full">這個店家還沒有任何菜單品項，請管理者新增。</p>
                     )}
                  </div>
               )}
@@ -370,11 +683,22 @@ export function OrderClient({ availableOrders, menus, initialOrderItems }: { ava
           <div className="lg:sticky lg:top-24">
             <OrderSummary
               order={order}
-              username={decodeURIComponent(username)}
+              username={username}
               onUpdateQuantity={handleUpdateQuantity}
+              onRemoveItem={handleRemoveItem}
               onSubmit={handleSubmitOrder}
-              disabled={isPastDeadline}
-              isEditing={!!editingOrderId}
+              onClear={() => setOrder([])}
+              isSubmitting={isSubmitting}
+              selectedOrder={selectedOrder}
+              notes={order[0]?.notes || ''}
+              setNotes={(notes) => {
+                setOrder(prev => prev.map(item => ({
+                  ...item,
+                  notes
+                })));
+              }}
+              isEditMode={isEditMode || !!editingOrderId}
+              disabled={isPastDeadline || (hasExistingOrder && !isEditMode)}
             />
           </div>
         </aside>
