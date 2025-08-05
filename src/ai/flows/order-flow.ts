@@ -23,7 +23,9 @@ export type DailyOrder = {
 // This type is for the user-facing order page
 export type AvailableOrder = {
     id: string; // dailyOrderId
-    vendor: Vendor;
+    vendor: Vendor & {
+        menuIds?: string[]; // 用於保持菜單項目的原始順序
+    };
     date: string;
     deadline: string;
 };
@@ -126,9 +128,10 @@ const formatDate = (dateValue: any): string => {
  */
 export async function getAvailableOrders(): Promise<AvailableOrder[]> {
     const dailyOrdersRange = `${DAILY_ORDERS_SHEET_NAME}!A:D`;
-    const [dailyOrdersData, allVendors] = await Promise.all([
+    const [dailyOrdersData, allVendors, menuData] = await Promise.all([
         getSheetData(SPREADSHEET_ID, dailyOrdersRange),
-        getVendors()
+        getVendors(),
+        getSheetData(SPREADSHEET_ID, 'menus!A:F')
     ]);
 
     if (!dailyOrdersData || dailyOrdersData.length < 2) {
@@ -159,10 +162,22 @@ export async function getAvailableOrders(): Promise<AvailableOrder[]> {
 
         const vendor = allVendorsMap.get(vendorId);
         if (!vendor || !vendor.isActive) continue;
+        
+        // 獲取該商家的所有菜單項目的 ID，保持原始順序
+        const menuIds = menuData && menuData.length > 1 
+            ? menuData
+                .slice(1) // 跳過標題行
+                .filter((row: any) => row[1] === vendorId) // 過濾出該商家的菜單
+                .map((row: any) => row[0]) // 獲取菜單 ID
+                .filter(Boolean) // 過濾掉空值
+            : [];
 
         availableOrders.push({
             id: id,
-            vendor,
+            vendor: {
+                ...vendor,
+                menuIds: menuIds.length > 0 ? menuIds : undefined // 如果有菜單，則添加 menuIds
+            },
             date: formatDate(dateRaw),
             deadline: formatTime(deadlineRaw) // Format the deadline
         });

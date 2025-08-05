@@ -1,7 +1,5 @@
 'use client';
 
-'use client';
-
 import { useState, useEffect, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from "next/link";
@@ -160,7 +158,7 @@ export function MyOrdersClient({ username }: MyOrdersClientProps) {
       <div className="space-y-4">
         {orders.map((orderGroup) => {
           const { dailyOrder, items, total, notes } = orderGroup;
-          const deadlinePassed = isDeadlinePassed(dailyOrder.deadline);
+          const deadlinePassed = isDeadlinePassed(dailyOrder.date, dailyOrder.deadline);
           const orderDate = new Date(dailyOrder.date);
           
           return (
@@ -180,26 +178,29 @@ export function MyOrdersClient({ username }: MyOrdersClientProps) {
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
-                    {deadlinePassed ? (
-                      <Badge variant="destructive" className="gap-1">
-                        <Ban className="h-3 w-3" /> 已截止
-                      </Badge>
-                    ) : (
-                      <Badge variant="outline" className="gap-1">
-                        <CalendarClock className="h-3 w-3" /> 進行中
-                      </Badge>
-                    )}
+                    <Badge
+                      variant={deadlinePassed ? "destructive" : "default"}
+                      className={cn(
+                        "gap-1 whitespace-nowrap",
+                        !deadlinePassed && "bg-green-600 text-destructive-foreground"
+                      )}
+                    >
+                      {deadlinePassed ? (
+                        <Ban className="h-3 w-3" />
+                      ) : (
+                        <CheckCircle2 className="h-3 w-3" />
+                      )}
+                      {deadlinePassed ? '已截止' : '可訂購'}
+                    </Badge>
                     <Badge variant={dailyOrder.status === 'confirmed' ? 'default' : 'outline'} className="gap-1">
                       {dailyOrder.status === 'confirmed' ? (
                         <>
-                          <CheckCircle2 className="h-3 w-3" /> 已確認
-                        </>
-                      ) : dailyOrder.status === 'cancelled' ? (
-                        <>
-                          <Ban className="h-3 w-3" /> 已取消
+                          <CheckCircle2 className="h-3 w-3" /> 已付款
                         </>
                       ) : (
-                        '待確認'
+                        <>
+                          <Ban className="h-3 w-3" /> 未付款
+                        </>
                       )}
                     </Badge>
                   </div>

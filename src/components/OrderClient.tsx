@@ -580,7 +580,17 @@ export function OrderClient({
 
   const selectedMenu = useMemo(() => {
     if (!selectedOrder) return [];
-    return menus[selectedOrder.vendor.vendorId] || [];
+    const vendorMenu = menus[selectedOrder.vendor.vendorId] || [];
+    // 創建一個映射，用於快速查找菜單項
+    const menuMap = new Map(vendorMenu.map(item => [item.id, item]));
+    // 從 AvailableOrder 中獲取菜單 ID 順序（如果有的話）
+    const menuIds = selectedOrder.vendor.menuIds || [];
+    // 按照原始菜單 ID 順序返回菜單項目
+    const orderedMenu = menuIds
+      .map(id => menuMap.get(id))
+      .filter((item): item is MenuItem => item !== undefined);
+    // 如果沒有指定順序，則返回原始菜單
+    return orderedMenu.length > 0 ? orderedMenu : vendorMenu;
   }, [selectedOrder, menus]);
 
   return (
