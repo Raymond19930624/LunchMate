@@ -192,8 +192,8 @@ export function MyOrdersClient({ username }: MyOrdersClientProps) {
                       )}
                       {deadlinePassed ? '已截止' : '可訂購'}
                     </Badge>
-                    <Badge variant={dailyOrder.status === 'confirmed' ? 'default' : 'outline'} className="gap-1">
-                      {dailyOrder.status === 'confirmed' ? (
+                    <Badge variant={items.some(item => item.isPaid) ? 'default' : 'outline'} className="gap-1">
+                      {items.some(item => item.isPaid) ? (
                         <>
                           <CheckCircle2 className="h-3 w-3" /> 已付款
                         </>

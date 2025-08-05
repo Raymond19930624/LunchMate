@@ -67,7 +67,7 @@ export function PublishOrderCard({ vendors, onOrderPublished }: PublishOrderCard
                 setSelectedVendorId('');
                 onOrderPublished();
             } catch (error) {
-                console.error("發佈訂單失敗:", error);
+                console.error("失敗:", error);
                 toast({
                     variant: "destructive",
                     title: "發佈失敗",
