@@ -45,7 +45,6 @@ export default function OrderDetailPage() {
 
   return (
     <div className="min-h-screen bg-background font-body text-foreground">
-      <SiteHeader />
       <main className="container mx-auto p-4 sm:p-6 lg:p-8">
         <div className="mb-6 flex justify-between items-center">
           <Link href="/admin" className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground">

@@ -1,6 +1,6 @@
 'use client';
 
-import { Suspense } from 'react';
+import { Suspense, useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import dynamic from 'next/dynamic';
 import ClientSiteHeader from '@/components/ClientSiteHeader';
@@ -9,15 +9,23 @@ import { Loader2 } from 'lucide-react';
 // 創建一個客戶端組件來處理 useSearchParams
 function MyOrdersContent() {
   const router = useRouter();
-  
-  // 這個組件將在客戶端渲染，所以可以在這裡安全地使用 useSearchParams
-  const searchParams = new URLSearchParams(
-    typeof window !== 'undefined' ? window.location.search : ''
-  );
-  const username = searchParams.get('username');
+  const [isClient, setIsClient] = useState(false);
+  const [username, setUsername] = useState<string | null>(null);
 
-  if (!username) {
-    router.push('/');
+  useEffect(() => {
+    // 確保在客戶端運行
+    setIsClient(true);
+    const searchParams = new URLSearchParams(window.location.search);
+    const usernameParam = searchParams.get('username');
+    
+    if (!usernameParam) {
+      router.push('/');
+    } else {
+      setUsername(usernameParam);
+    }
+  }, [router]);
+
+  if (!isClient || !username) {
     return (
       <div className="flex min-h-screen items-center justify-center">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
