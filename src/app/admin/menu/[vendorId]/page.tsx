@@ -7,7 +7,8 @@ import { SiteHeader } from "@/components/SiteHeader";
 import { getMenusByVendorId } from '@/ai/flows/menu-flow';
 import { MenuEditor } from "@/components/admin/MenuEditor";
 import Link from "next/link";
-import { ArrowLeft, Loader2 } from "lucide-react";
+import { ArrowLeft, Loader2, RefreshCw } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import type { MenuItem } from '@/ai/flows/menu-flow';
 
 // This is now a Client Component to fetch data on the client-side.
@@ -59,14 +60,23 @@ export default function MenuAdminPage() {
   return (
     <div className="min-h-screen bg-background font-body text-foreground">
       <main className="container mx-auto p-4 sm:p-6 lg:p-8">
-        <div className="mb-8">
+        <div className="mb-6 flex justify-between items-center">
           <Link href="/admin" className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors">
             <ArrowLeft className="h-4 w-4" />
             返回管理介面
           </Link>
+          <Button 
+            variant="outline" 
+            size="sm" 
+            onClick={handleMenuUpdate} 
+            disabled={isLoading}
+          >
+            <RefreshCw className={`mr-2 h-4 w-4 ${isLoading ? 'animate-spin' : ''}`} />
+            重新整理
+          </Button>
         </div>
         <h1 className="font-headline text-3xl font-bold mb-2">編輯菜單：{vendorName}</h1>
-        <p className="text-muted-foreground mb-6">管理 {vendorName} 的菜單品項。</p>
+        <p className="text-muted-foreground mb-8">管理 {vendorName} 的菜單品項。</p>
         
         {isLoading ? (
           <div className="flex justify-center items-center h-64">

@@ -52,7 +52,17 @@ const optionsToString = (options: Record<string, string>): string => {
     return Object.entries(options).map(([key, value]) => `${key}: ${value}`).join(', ');
 };
 
-function UserOrderCard({ userOrder, onPaymentUpdate, onOrderUpdate }: { userOrder: OrderByUser, onPaymentUpdate: (username: string, isPaid: boolean) => void, onOrderUpdate: () => void }) {
+function UserOrderCard({ userOrder, onPaymentUpdate, onOrderUpdate, deadline }: { userOrder: OrderByUser, onPaymentUpdate: (username: string, isPaid: boolean) => void, onOrderUpdate: () => void, deadline?: string }) {
+    const isDeadlinePassed = useMemo(() => {
+        if (!deadline) return false;
+        const [hours, minutes] = deadline.split(':').map(Number);
+        const now = new Date();
+        const deadlineTime = new Date(now);
+        deadlineTime.setHours(hours, minutes, 0, 0);
+        return now > deadlineTime;
+    }, [deadline]);
+    
+    const isReadOnly = userOrder.isPaid || isDeadlinePassed;
     const { toast } = useToast();
     const [isEditing, setIsEditing] = useState(false);
     const [isPending, startTransition] = useTransition();
@@ -158,8 +168,13 @@ function UserOrderCard({ userOrder, onPaymentUpdate, onOrderUpdate }: { userOrde
                         <p className="text-sm text-muted-foreground">總計</p>
                         <p className="text-xl font-bold">${isEditing ? calculatedTotal.toLocaleString() : userOrder.total.toLocaleString()}</p>
                     </div>
-                     {!isEditing && (
-                        <Button variant="outline" size="icon" onClick={() => setIsEditing(true)}>
+                    {!isReadOnly && !isEditing && (
+                        <Button 
+                            variant="outline" 
+                            size="icon" 
+                            onClick={() => setIsEditing(true)}
+                            title="編輯訂單"
+                        >
                             <Edit className="h-4 w-4" />
                         </Button>
                     )}
@@ -199,12 +214,21 @@ function UserOrderCard({ userOrder, onPaymentUpdate, onOrderUpdate }: { userOrde
             </CardContent>
             {isEditing && (
                 <CardFooter className="flex justify-end gap-2 bg-muted/50 p-3">
-                     <Button variant="ghost" onClick={handleCancelEdit} disabled={isPending}>
+                    <Button 
+                        variant="ghost" 
+                        onClick={handleCancelEdit} 
+                        disabled={isPending}
+                        title="取消編輯"
+                    >
                         <X className="mr-2 h-4 w-4" />取消
                     </Button>
                     <AlertDialog>
                         <AlertDialogTrigger asChild>
-                            <Button variant="default" disabled={isPending}>
+                            <Button 
+                                variant="default" 
+                                disabled={isPending}
+                                title="儲存變更"
+                            >
                                 {isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
                                 儲存變更
                             </Button>
@@ -229,7 +253,7 @@ function UserOrderCard({ userOrder, onPaymentUpdate, onOrderUpdate }: { userOrde
 }
 
 
-export function OrderDetailClient({ initialOrderDetails }: OrderDetailClientProps) {
+export function OrderDetailClient({ initialOrderDetails, deadline }: OrderDetailClientProps & { deadline?: string }) {
   const [orderDetails, setOrderDetails] = useState<OrderDetailItem[]>(initialOrderDetails);
   
   useEffect(() => {
@@ -416,6 +440,7 @@ export function OrderDetailClient({ initialOrderDetails }: OrderDetailClientProp
                 <UserOrderCard 
                     key={userOrder.username}
                     userOrder={userOrder}
+                    deadline={deadline}
                     onPaymentUpdate={handlePaymentUpdate}
                     onOrderUpdate={() => {
                         // This re-fetches ALL data from parent when one card is updated.

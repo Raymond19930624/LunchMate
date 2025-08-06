@@ -47,14 +47,14 @@ export default function OrderDetailPage() {
     <div className="min-h-screen bg-background font-body text-foreground">
       <main className="container mx-auto p-4 sm:p-6 lg:p-8">
         <div className="mb-6 flex justify-between items-center">
-          <Link href="/admin" className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground">
+          <Link href="/admin" className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors">
             <ArrowLeft className="h-4 w-4" />
             返回管理介面
           </Link>
-           <Button variant="outline" size="sm" onClick={fetchOrderDetails} disabled={isLoading} data-re-fetch-button>
-              <RefreshCw className={`mr-2 h-4 w-4 ${isLoading ? 'animate-spin' : ''}`} />
-              重新整理
-            </Button>
+          <Button variant="outline" size="sm" onClick={fetchOrderDetails} disabled={isLoading} data-re-fetch-button>
+            <RefreshCw className={`mr-2 h-4 w-4 ${isLoading ? 'animate-spin' : ''}`} />
+            重新整理
+          </Button>
         </div>
         
         {isLoading ? (
@@ -69,8 +69,11 @@ export default function OrderDetailPage() {
         ) : dailyOrder ? (
           <>
             <h1 className="font-headline text-3xl font-bold mb-2">訂單詳情：{dailyOrder.vendorName}</h1>
-            <p className="text-muted-foreground mb-6">檢視 {dailyOrder.date} 的訂單，於 {dailyOrder.deadline} 截止。</p>
-            <OrderDetailClient initialOrderDetails={orderDetails} />
+            <p className="text-muted-foreground mb-8">檢視 {dailyOrder.date} 的訂單，於 {dailyOrder.deadline} 截止。</p>
+            <OrderDetailClient 
+              initialOrderDetails={orderDetails} 
+              deadline={dailyOrder.deadline}
+            />
           </>
         ) : null}
       </main>

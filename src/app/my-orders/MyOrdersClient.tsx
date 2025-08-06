@@ -47,7 +47,22 @@ export function MyOrdersClient({ username }: MyOrdersClientProps) {
     setError(null);
     try {
       const fetchedOrders = await getOrdersByUsername(decodeURIComponent(username));
-      setOrders(fetchedOrders);
+      
+      // 按截止時間排序：先按日期，再按時間
+      const sortedOrders = [...fetchedOrders].sort((a, b) => {
+        // 先比較日期
+        const dateCompare = new Date(a.dailyOrder.date).getTime() - new Date(b.dailyOrder.date).getTime();
+        if (dateCompare !== 0) return dateCompare;
+        
+        // 如果日期相同，再比較時間
+        const [aHour, aMinute] = a.dailyOrder.deadline.split(':').map(Number);
+        const [bHour, bMinute] = b.dailyOrder.deadline.split(':').map(Number);
+        
+        if (aHour !== bHour) return aHour - bHour;
+        return aMinute - bMinute;
+      });
+      
+      setOrders(sortedOrders);
     } catch (e) {
       setError(e instanceof Error ? e.message : '載入訂單時發生錯誤');
       console.error('Error fetching orders:', e);
@@ -246,13 +261,15 @@ export function MyOrdersClient({ username }: MyOrdersClientProps) {
                   )}
                 </div>
                 <div className="flex items-center gap-2 w-full sm:w-auto">
-                  <Button variant="outline" size="sm" asChild className="flex-1 sm:flex-initial">
-                    <Link href={`/order/${dailyOrder.id}?username=${encodeURIComponent(username)}`}>
-                      <Edit className="h-4 w-4 mr-2" />
-                      編輯
-                    </Link>
-                  </Button>
-                  {!deadlinePassed && dailyOrder.status !== 'cancelled' && (
+                  {!deadlinePassed && !items.some(item => item.isPaid) && dailyOrder.status !== 'cancelled' && (
+                    <Button variant="outline" size="sm" asChild className="flex-1 sm:flex-initial">
+                      <Link href={`/order/${dailyOrder.id}?username=${encodeURIComponent(username)}`}>
+                        <Edit className="h-4 w-4 mr-2" />
+                        編輯
+                      </Link>
+                    </Button>
+                  )}
+                  {!deadlinePassed && dailyOrder.status !== 'cancelled' && !items.some(item => item.isPaid) && (
                     <AlertDialog>
                       <AlertDialogTrigger asChild>
                         <Button variant="outline" size="sm" className="flex-1 sm:flex-initial">

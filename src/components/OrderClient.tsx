@@ -353,20 +353,33 @@ export function OrderClient({
   }, [selectedOrder]);
 
 
+  const [pendingToast, setPendingToast] = useState<{show: boolean, message?: string}>({show: false});
+
+  // 處理待顯示的提示
+  useEffect(() => {
+    if (pendingToast.show && pendingToast.message) {
+      toast({
+        variant: "destructive",
+        title: "尚有未完成訂單",
+        description: pendingToast.message,
+      });
+      setPendingToast({show: false});
+    }
+  }, [pendingToast]);
+
   const handleSelectOrder = useCallback((orderToSelect: AvailableOrder) => {
     // Disable switching if in editing mode
     if (editingOrderId) return;
       
     if (order.length > 0 && selectedOrder?.vendor.vendorId !== orderToSelect.vendor.vendorId) {
-       toast({
-        variant: "destructive",
-        title: "尚有未完成訂單",
-        description: "切換店家將會清空目前的訂單，請先完成或取消訂單。",
+      setPendingToast({
+        show: true,
+        message: "切換店家將會清空目前的訂單，請先完成或取消訂單。"
       });
       return;
     }
     setSelectedOrder(orderToSelect);
-  }, [order.length, selectedOrder?.vendor.vendorId, toast, editingOrderId]);
+  }, [order.length, selectedOrder?.vendor.vendorId, editingOrderId]);
   
   // 使用 useRef 來追蹤是否需要顯示提示
   const toastRef = useRef<() => void>();
@@ -374,8 +387,13 @@ export function OrderClient({
   // 使用 useEffect 來處理提示，確保在渲染後執行
   useEffect(() => {
     if (toastRef.current) {
-      toastRef.current();
-      toastRef.current = undefined;
+      const showToast = toastRef.current;
+      // 在下一個事件循環中顯示提示，確保在渲染完成後
+      const timer = setTimeout(() => {
+        showToast();
+        toastRef.current = undefined;
+      }, 0);
+      return () => clearTimeout(timer);
     }
   });
 

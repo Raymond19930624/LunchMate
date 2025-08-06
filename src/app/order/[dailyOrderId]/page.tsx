@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams, useParams } from 'next/navigation';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Loader2, ArrowLeft } from 'lucide-react';
@@ -10,21 +10,18 @@ import { getExistingOrderForEdit, getOrderDetailsByDailyOrderId } from '@/ai/flo
 import { OrderClient } from '@/components/OrderClient';
 import { type Menu } from '@/components/OrderClient';
 
-interface PageProps {
-  params: { dailyOrderId: string };
-  searchParams: { username?: string };
-}
-
-export default function EditOrderPage({ params, searchParams }: PageProps) {
+export default function EditOrderPage() {
   const router = useRouter();
-  const username = searchParams.username;
+  const searchParams = useSearchParams();
+  const params = useParams();
+  const username = searchParams.get('username') || '';
+  const dailyOrderId = Array.isArray(params.dailyOrderId) ? params.dailyOrderId[0] : params.dailyOrderId || '';
   
   const [menus, setMenus] = useState<Menu>({});
   const [initialOrderItems, setInitialOrderItems] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [availableOrders, setAvailableOrders] = useState<any[]>([]);
-  const dailyOrderId = params.dailyOrderId;
 
   useEffect(() => {
     const fetchOrderData = async () => {

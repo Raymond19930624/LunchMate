@@ -121,8 +121,11 @@ export function OrderSummary({
         ) : (
           <div className="space-y-4">
             <div className="max-h-60 overflow-y-auto pr-2 space-y-4">
-              {order.map((item) => (
-                <div key={item.id} className="flex items-start justify-between font-body text-sm">
+              {order.map((item, index) => (
+                <div 
+                  key={`${item.id}-${index}-${JSON.stringify(item.options)}`} 
+                  className="flex items-start justify-between font-body text-sm"
+                >
                   <div className="flex-1">
                     <div className="flex items-start justify-between">
                       <p className="font-medium">{item.name}</p>
@@ -131,8 +134,8 @@ export function OrderSummary({
                     
                     {Object.keys(item.options).length > 0 && (
                       <div className="mt-1 text-xs text-muted-foreground">
-                        {Object.entries(item.options).map(([key, value]) => (
-                          <div key={key} className="flex">
+                        {Object.entries(item.options).map(([key, value], optionIndex) => (
+                          <div key={`${item.id}-${key}-${optionIndex}`} className="flex">
                             <span className="text-muted-foreground/80">{key}:</span>
                             <span className="ml-1">{value}</span>
                           </div>
