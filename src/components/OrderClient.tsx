@@ -18,7 +18,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { type AvailableOrder, submitOrder, getOrdersByUsername } from "@/ai/flows/order-flow";
+import { type AvailableOrder, submitOrder, getOrdersByUsername, deleteUserOrder } from "@/ai/flows/order-flow";
 import type { MenuItem } from "@/ai/flows/menu-flow";
 import { parse } from 'date-fns';
 
@@ -367,19 +367,141 @@ export function OrderClient({
     }
   }, [pendingToast]);
 
-  const handleSelectOrder = useCallback((orderToSelect: AvailableOrder) => {
-    // Disable switching if in editing mode
-    if (editingOrderId) return;
+  const [isOrderSubmitted, setIsOrderSubmitted] = useState(false);
+
+  // 使用 useRef 來緩存用戶訂單數據
+  const userOrdersCache = useRef<{ 
+    [key: string]: { 
+      data: any, 
+      timestamp: number 
+    } 
+  }>({});
+  
+  // 緩存過期時間（5分鐘）
+  const CACHE_EXPIRY = 5 * 60 * 1000;
+
+  // 清除特定訂單的緩存
+  const clearOrderCache = useCallback((orderId: string) => {
+    const cacheKey = `${username}-${orderId}`;
+    if (userOrdersCache.current[cacheKey]) {
+      delete userOrdersCache.current[cacheKey];
+    }
+  }, [username]);
+
+  // 更新訂單狀態的輔助函數
+  const updateOrderState = (userOrders: any[], orderId: string) => {
+    const existingOrder = userOrders.find(o => o.dailyOrder?.id === orderId);
+    
+    if (existingOrder) {
+      const orderItems = existingOrder.items.map((item: any) => ({
+        id: item.menuItemId,
+        menuItemId: item.menuItemId,
+        name: item.itemName,
+        price: item.price,
+        quantity: item.quantity,
+        options: item.options,
+        notes: item.notes || '',
+        vendorId: item.vendorId,
+        vendorName: item.vendorName,
+        username: username
+      } as OrderItem));
       
-    if (order.length > 0 && selectedOrder?.vendor.vendorId !== orderToSelect.vendor.vendorId) {
-      setPendingToast({
-        show: true,
-        message: "切換店家將會清空目前的訂單，請先完成或取消訂單。"
-      });
+      setOrder(orderItems);
+      setHasExistingOrder(true);
+    } else {
+      setOrder([]);
+      setHasExistingOrder(false);
+    }
+  };
+
+  // 檢查用戶是否已經有該訂單
+  const checkUserOrder = useCallback(async (orderId: string) => {
+    const now = Date.now();
+    const cacheKey = `${username}-${orderId}`;
+    
+    // 檢查緩存是否存在且未過期
+    if (
+      userOrdersCache.current[cacheKey] && 
+      now - userOrdersCache.current[cacheKey].timestamp < CACHE_EXPIRY
+    ) {
+      const { data } = userOrdersCache.current[cacheKey];
+      updateOrderState(data, orderId);
       return;
     }
+    
+    try {
+      // 從 API 獲取最新數據
+      const userOrders = await getOrdersByUsername(username);
+      
+      // 更新緩存
+      userOrdersCache.current[cacheKey] = {
+        data: userOrders,
+        timestamp: now
+      };
+      
+      // 處理訂單數據
+      updateOrderState(userOrders, orderId);
+    } catch (error) {
+      console.error('載入用戶訂單時出錯:', error);
+      setOrder([]);
+      setHasExistingOrder(false);
+    }
+  }, [username]);
+  
+
+
+  const [showConfirmDialog, setShowConfirmDialog] = useState(false);
+  const [pendingOrder, setPendingOrder] = useState<AvailableOrder | null>(null);
+  
+
+
+  // 處理確認切換訂單
+  const confirmSwitchOrder = useCallback(async () => {
+    if (!pendingOrder) return;
+    
+    // 清空購物車
+    setOrder([]);
+    setShowConfirmDialog(false);
+    
+    // 更新選中的訂單
+    setSelectedOrder(pendingOrder);
+    
+    // 檢查用戶是否已經有該訂單，如果有則載入
+    await checkUserOrder(pendingOrder.id);
+    
+    // 重置待處理的訂單
+    setPendingOrder(null);
+  }, [pendingOrder, checkUserOrder]);
+
+  // 取消切換訂單
+  const cancelSwitchOrder = useCallback(() => {
+    setShowConfirmDialog(false);
+    setPendingOrder(null);
+  }, []);
+
+  const handleSelectOrder = useCallback(async (orderToSelect: AvailableOrder) => {
+    if (editingOrderId) return;
+    
+    // 如果當前訂單已提交，直接切換到目標訂單
+    if (isOrderSubmitted) {
+      setSelectedOrder(orderToSelect);
+      await checkUserOrder(orderToSelect.id);
+      return;
+    }
+    
+    // 如果購物車中有項目，且切換到不同店家的訂單，則顯示確認對話框
+    if (order.length > 0 && selectedOrder?.vendor.vendorId !== orderToSelect.vendor.vendorId) {
+      setPendingOrder(orderToSelect);
+      setShowConfirmDialog(true);
+      return;
+    }
+    
+    // 其他情況直接切換訂單
     setSelectedOrder(orderToSelect);
-  }, [order.length, selectedOrder?.vendor.vendorId, editingOrderId]);
+    
+    // 檢查用戶是否已經有該訂單，如果有則載入
+    await checkUserOrder(orderToSelect.id);
+  }, [order.length, selectedOrder?.vendor.vendorId, editingOrderId, isOrderSubmitted, checkUserOrder]);
   
   // 使用 useRef 來追蹤是否需要顯示提示
   const toastRef = useRef<() => void>();
@@ -516,6 +638,68 @@ export function OrderClient({
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   
+  // 將 checkExistingOrder 函數移到組件頂部，使其可以被其他函數引用
+  const checkExistingOrder = useCallback(async () => {
+    if (!username || !selectedOrder) return;
+    
+    const orderId = selectedOrder.id;
+    
+    // 如果正在加載或已經加載過，則直接返回
+    if (isLoadingOrders[orderId] || ordersCache.current[orderId] !== undefined) {
+      setHasExistingOrder(!!ordersCache.current[orderId]);
+      return;
+    }
+    
+    try {
+      // 設置加載狀態
+      setIsLoadingOrders(prev => ({ ...prev, [orderId]: true }));
+      
+      // 如果沒有緩存，則從 API 獲取數據
+      if (!ordersCache.current[username]) {
+        const orders = await getOrdersByUsername(username);
+        ordersCache.current[username] = orders;
+      }
+      
+      // 查找當前使用者在這個 dailyOrder 的訂單
+      const userOrder = ordersCache.current[username].find(
+        (o: any) => o.dailyOrderId === orderId
+      );
+      
+      // 更新狀態
+      setHasExistingOrder(!!userOrder);
+      
+      // 如果是編輯模式，加載現有訂單
+      if (isEditMode && userOrder) {
+        const orderItems = userOrder.items.map((item: any) => ({
+          id: item.id,
+          menuItemId: item.menuItemId,
+          name: item.itemName,
+          price: item.price,
+          quantity: item.quantity,
+          vendorName: selectedOrder.vendor.vendorName,
+          vendorId: selectedOrder.vendor.vendorId,
+          username: username,
+          options: item.options || {},
+          notes: item.notes || ''
+        }));
+        setOrder(orderItems);
+      }
+    } catch (error) {
+      console.error("檢查訂單時出錯:", error);
+    } finally {
+      // 清除加載狀態
+      setIsLoadingOrders(prev => ({ ...prev, [orderId]: false }));
+    }
+  }, [username, selectedOrder, isEditMode]);
+
+  useEffect(() => {
+    if (selectedOrder) {
+      checkExistingOrder();
+    }
+  }, [selectedOrder, checkExistingOrder]);
+
+
+
   const handleSubmitOrder = useCallback(async (finalOrder: Omit<FinalOrder, 'dailyOrderId'>) => {
     if (!selectedOrder) {
       toast({ variant: "destructive", title: "錯誤", description: "請選擇一個有效的訂單" });
@@ -545,15 +729,11 @@ export function OrderClient({
       // 提交訂單
       await submitOrder(orderData);
       
-      // 清空購物車
-      setOrder([]);
-      
       // 更新 hasExistingOrder 狀態
       setHasExistingOrder(true);
       
       // 清除緩存，強制下次重新加載
-      const orderId = selectedOrder.id;
-      delete ordersCache.current[orderId];
+      clearOrderCache(selectedOrder.id);
       
       // 顯示簡潔的成功訊息
       toast({ 
@@ -562,6 +742,14 @@ export function OrderClient({
           ? `已成功更新 ${selectedOrder.vendor.vendorName} 的訂單`
           : `已成功送出 ${selectedOrder.vendor.vendorName} 的訂單`
       });
+      
+      // 設置訂單已提交狀態，允許切換到其他訂單
+      setIsOrderSubmitted(true);
+      
+      // 如果是編輯模式，重新加載訂單以顯示最新狀態
+      if (isEditing) {
+        checkExistingOrder();
+      }
       
     } catch (error) {
       console.error("訂單提交錯誤:", error);
@@ -573,7 +761,7 @@ export function OrderClient({
     } finally {
       setIsSubmitting(false);
     }
-  }, [selectedOrder, isEditMode, editingOrderId, submitOrder, setOrder, toast]);
+  }, [selectedOrder, isEditMode, editingOrderId, submitOrder, setOrder, toast, checkExistingOrder]);
 
   const handleRemoveItem = useCallback((itemId: string) => {
     setOrder(prevOrder => {
@@ -612,7 +800,33 @@ export function OrderClient({
   }, [selectedOrder, menus]);
 
   return (
-    <div className="container mx-auto max-w-screen-xl p-4 sm:p-6 lg:p-8">
+    <div className="container mx-auto max-w-screen-xl p-4 sm:p-6 lg:p-8 relative">
+      {/* 確認對話框 */}
+      {showConfirmDialog && pendingOrder && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg p-6 max-w-md w-full shadow-xl">
+            <h3 className="text-lg font-medium mb-4">確認切換訂單</h3>
+            <p className="mb-6">
+              您有尚未提交的訂單項目。確定要切換到 <span className="font-semibold">{pendingOrder.vendor.vendorName}</span> 的訂單嗎？這將清空您的購物車。
+            </p>
+            <div className="flex justify-end space-x-3">
+              <Button 
+                variant="outline" 
+                onClick={cancelSwitchOrder}
+                className="px-6"
+              >
+                取消
+              </Button>
+              <Button 
+                onClick={confirmSwitchOrder}
+                className="px-6"
+              >
+                確認
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
       <div className="grid grid-cols-1 lg:grid-cols-3 lg:gap-8">
         <div className="lg:col-span-2 space-y-8">
           {/* Vendor Selection */}
@@ -684,7 +898,7 @@ export function OrderClient({
                  <Card className="flex flex-col items-center justify-center p-12 text-center text-blue-700 bg-blue-50 border-blue-200">
                     <CheckCircle2 className="h-16 w-16 mb-4 text-blue-600" />
                     <h3 className="font-headline text-xl font-bold mb-2">您已經訂購過此訂單</h3>
-                    <p className="font-body text-sm">請前往「我的訂單」頁面進行修改</p>
+                    <p className="font-body text-sm">請在當前頁面直接修改訂單</p>
                  </Card>
               ) : (
                  <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-6">
@@ -727,6 +941,37 @@ export function OrderClient({
               }}
               isEditMode={isEditMode || !!editingOrderId}
               disabled={isPastDeadline || (hasExistingOrder && !isEditMode)}
+              hasSubmitted={hasExistingOrder}
+              onEdit={() => {
+                // 啟用編輯模式
+                if (selectedOrder) {
+                  router.push(`/order/${selectedOrder.id}/edit?username=${encodeURIComponent(username)}`);
+                }
+              }}
+              onDelete={async () => {
+                if (!selectedOrder || !window.confirm('確定要刪除此訂單嗎？此操作無法復原。')) {
+                  return;
+                }
+                try {
+                  // 調用刪除訂單的 API
+                  await deleteUserOrder({ dailyOrderId: selectedOrder.id, username });
+                  toast({
+                    title: "訂單已刪除",
+                    description: `已成功刪除 ${selectedOrder.vendor.vendorName} 的訂單`,
+                    variant: "default"
+                  });
+                  // 重新加載頁面或更新狀態
+                  setOrder([]);
+                  setHasExistingOrder(false);
+                } catch (error) {
+                  console.error("刪除訂單時出錯:", error);
+                  toast({
+                    variant: "destructive",
+                    title: "刪除訂單失敗",
+                    description: error instanceof Error ? error.message : "請稍後再試"
+                  });
+                }
+              }}
             />
           </div>
         </aside>

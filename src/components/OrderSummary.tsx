@@ -46,6 +46,9 @@ interface OrderSummaryProps {
   setNotes: (notes: string) => void;
   isEditMode?: boolean;
   disabled?: boolean;
+  hasSubmitted?: boolean;
+  onEdit?: () => void;
+  onDelete?: () => void;
 }
 
 export function OrderSummary({ 
@@ -60,7 +63,10 @@ export function OrderSummary({
   notes, 
   setNotes, 
   isEditMode = false, 
-  disabled = false 
+  disabled = false,
+  hasSubmitted = false,
+  onEdit,
+  onDelete
 }: OrderSummaryProps) {
   // When the component receives an existing order for editing, update the notes field.
   useEffect(() => {
@@ -82,13 +88,12 @@ export function OrderSummary({
   }, [order]);
   
   const handleSubmit = () => {
-    if (disabled) return;
+    if (order.length === 0 || disabled) return;
     
-    // 確保所有項目都有正確的 vendorId 和 vendorName
     const finalOrder: Omit<FinalOrder, 'dailyOrderId'> = {
       username,
-      vendorId,
-      vendorName,
+      vendorId: order[0].vendorId,
+      vendorName: order[0].vendorName,
       notes: notes.trim(),
       items: order.map(({ vendorName, vendorId, username, ...item }) => ({
         ...item,
@@ -97,7 +102,19 @@ export function OrderSummary({
     };
     
     onSubmit(finalOrder);
-  }
+  };
+
+  const handleEdit = () => {
+    if (onEdit) {
+      onEdit();
+    }
+  };
+
+  const handleDelete = () => {
+    if (onDelete) {
+      onDelete();
+    }
+  };
 
   return (
     <Card className={cn("shadow-xl bg-background/80 backdrop-blur-sm transform transition-all duration-300 lg:-rotate-1 lg:hover:rotate-0", disabled && "bg-muted/80 lg:rotate-0")}>
@@ -229,14 +246,35 @@ export function OrderSummary({
           </div>
         )}
       </CardContent>
-      <CardFooter>
-        <Button
-          className="w-full bg-accent text-accent-foreground hover:bg-accent/90 text-base py-6"
-          disabled={order.length === 0 || disabled}
-          onClick={handleSubmit}
-        >
-          {disabled ? "已截止" : (isEditMode ? '確認修改' : '送出訂單')}
-        </Button>
+      <CardFooter className="flex flex-col gap-2">
+        {!hasSubmitted ? (
+          <Button
+            className="w-full bg-accent text-accent-foreground hover:bg-accent/90 text-base py-6"
+            disabled={order.length === 0 || disabled}
+            onClick={handleSubmit}
+          >
+            {disabled ? "已截止" : (isEditMode ? '確認修改' : '送出訂單')}
+          </Button>
+        ) : (
+          <div className="w-full flex gap-2">
+            <Button
+              variant="outline"
+              className="flex-1 bg-background hover:bg-accent/10 text-base py-6 border-2 border-accent/20"
+              onClick={handleEdit}
+              disabled={disabled}
+            >
+              編輯訂單
+            </Button>
+            <Button
+              variant="destructive"
+              className="flex-1 bg-destructive/90 hover:bg-destructive text-base py-6"
+              onClick={handleDelete}
+              disabled={disabled}
+            >
+              刪除訂單
+            </Button>
+          </div>
+        )}
       </CardFooter>
     </Card>
   );

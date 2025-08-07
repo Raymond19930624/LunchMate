@@ -2,7 +2,7 @@
 "use client";
 
 import { useSearchParams, usePathname, useRouter } from 'next/navigation';
-import { User, UtensilsCrossed, LogOut, NotebookText, ArrowLeft } from "lucide-react";
+import { User, UtensilsCrossed, LogOut } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import Link from 'next/link';
 
@@ -33,22 +33,6 @@ export function SiteHeader() {
                         <>
                             <User className="h-5 w-5 text-muted-foreground" />
                             <span className="text-sm font-medium text-foreground">{decodeURIComponent(username!)}</span>
-                             
-                             {onMyOrdersPage ? (
-                                <Button variant="outline" size="sm" asChild>
-                                    <Link href={`/order?username=${username}`}>
-                                        <ArrowLeft className="mr-2 h-4 w-4"/>
-                                        返回點餐
-                                    </Link>
-                                </Button>
-                             ) : (
-                                <Button variant="outline" size="sm" asChild>
-                                    <Link href={`/my-orders?username=${username}`}>
-                                        <NotebookText className="mr-2 h-4 w-4"/>
-                                        我的訂單
-                                    </Link>
-                                </Button>
-                             )}
                         </>
                     )}
                     {showAdminSection && (
