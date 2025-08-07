@@ -379,6 +379,43 @@ export function OrderClient({
   
   // 緩存過期時間（5分鐘）
   const CACHE_EXPIRY = 5 * 60 * 1000;
+  
+  // 更新緩存
+  const updateCache = useCallback((username: string, orderId: string, data: any) => {
+    const cacheKey = `${username}-${orderId}`;
+    userOrdersCache.current[cacheKey] = {
+      data,
+      timestamp: Date.now()
+    };
+  }, []);
+  
+  // 清除用戶的所有訂單緩存
+  const clearUserCache = useCallback((username: string) => {
+    Object.keys(userOrdersCache.current).forEach(key => {
+      if (key.startsWith(`${username}-`)) {
+        delete userOrdersCache.current[key];
+      }
+    });
+  }, []);
+  
+  // 獲取用戶訂單數據（優先從緩存讀取）
+  const fetchUserOrders = useCallback(async (username: string, orderId: string, forceRefresh = false) => {
+    const cacheKey = `${username}-${orderId}`;
+    const now = Date.now();
+    
+    // 如果強制刷新或緩存不存在/已過期，則從 API 獲取
+    if (forceRefresh || 
+        !userOrdersCache.current[cacheKey] || 
+        now - userOrdersCache.current[cacheKey].timestamp > CACHE_EXPIRY) {
+      
+      const userOrders = await getOrdersByUsername(username);
+      updateCache(username, orderId, userOrders);
+      return userOrders;
+    }
+    
+    // 返回緩存數據
+    return userOrdersCache.current[cacheKey].data;
+  }, []);
 
   // 清除特定訂單的緩存
   const clearOrderCache = useCallback((orderId: string) => {
@@ -415,38 +452,28 @@ export function OrderClient({
   };
 
   // 檢查用戶是否已經有該訂單
-  const checkUserOrder = useCallback(async (orderId: string) => {
-    const now = Date.now();
-    const cacheKey = `${username}-${orderId}`;
-    
-    // 檢查緩存是否存在且未過期
-    if (
-      userOrdersCache.current[cacheKey] && 
-      now - userOrdersCache.current[cacheKey].timestamp < CACHE_EXPIRY
-    ) {
-      const { data } = userOrdersCache.current[cacheKey];
-      updateOrderState(data, orderId);
-      return;
-    }
-    
+  const checkUserOrder = useCallback(async (orderId: string, forceRefresh = false) => {
     try {
-      // 從 API 獲取最新數據
-      const userOrders = await getOrdersByUsername(username);
-      
-      // 更新緩存
-      userOrdersCache.current[cacheKey] = {
-        data: userOrders,
-        timestamp: now
-      };
+      // 從緩存或 API 獲取數據
+      const userOrders = await fetchUserOrders(username, orderId, forceRefresh);
       
       // 處理訂單數據
       updateOrderState(userOrders, orderId);
+      
+      // 檢查是否有該訂單
+      const hasOrder = userOrders.some((o: any) => o.dailyOrder?.id === orderId);
+      setHasExistingOrder(hasOrder);
+      setIsOrderSubmitted(hasOrder);
+      
+      return hasOrder;
     } catch (error) {
       console.error('載入用戶訂單時出錯:', error);
       setOrder([]);
       setHasExistingOrder(false);
+      setIsOrderSubmitted(false);
+      return false;
     }
-  }, [username]);
+  }, [username, fetchUserOrders]);
   
 
 
@@ -466,8 +493,8 @@ export function OrderClient({
     // 更新選中的訂單
     setSelectedOrder(pendingOrder);
     
-    // 檢查用戶是否已經有該訂單，如果有則載入
-    await checkUserOrder(pendingOrder.id);
+    // 強制刷新訂單數據
+    await checkUserOrder(pendingOrder.id, true);
     
     // 重置待處理的訂單
     setPendingOrder(null);
@@ -482,12 +509,8 @@ export function OrderClient({
   const handleSelectOrder = useCallback(async (orderToSelect: AvailableOrder) => {
     if (editingOrderId) return;
     
-    // 如果當前訂單已提交，直接切換到目標訂單
-    if (isOrderSubmitted) {
-      setSelectedOrder(orderToSelect);
-      await checkUserOrder(orderToSelect.id);
-      return;
-    }
+    // 如果是切換到同一個訂單，不做任何操作
+    if (selectedOrder?.id === orderToSelect.id) return;
     
     // 如果購物車中有項目，且切換到不同店家的訂單，則顯示確認對話框
     if (order.length > 0 && selectedOrder?.vendor.vendorId !== orderToSelect.vendor.vendorId) {
@@ -496,11 +519,12 @@ export function OrderClient({
       return;
     }
     
-    // 其他情況直接切換訂單
+    // 清空購物車並切換訂單
+    setOrder([]);
     setSelectedOrder(orderToSelect);
     
-    // 檢查用戶是否已經有該訂單，如果有則載入
-    await checkUserOrder(orderToSelect.id);
+    // 檢查用戶是否已經有該訂單（從緩存讀取）
+    await checkUserOrder(orderToSelect.id, false);
   }, [order.length, selectedOrder?.vendor.vendorId, editingOrderId, isOrderSubmitted, checkUserOrder]);
   
   // 使用 useRef 來追蹤是否需要顯示提示

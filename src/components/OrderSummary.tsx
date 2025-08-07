@@ -117,7 +117,7 @@ export function OrderSummary({
   };
 
   return (
-    <Card className={cn("shadow-xl bg-background/80 backdrop-blur-sm transform transition-all duration-300 lg:-rotate-1 lg:hover:rotate-0", disabled && "bg-muted/80 lg:rotate-0")}>
+    <Card className={cn("shadow-xl backdrop-blur-sm transform transition-all duration-300 lg:-rotate-1 lg:hover:rotate-0", disabled ? "bg-muted/80" : "bg-background/80")}>
       <CardHeader className="pb-4">
         <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
