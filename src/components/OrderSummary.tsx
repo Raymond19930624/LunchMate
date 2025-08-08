@@ -51,7 +51,7 @@ interface OrderSummaryProps {
   onDelete?: () => void;
 }
 
-export function OrderSummary({ 
+export const OrderSummary = ({ 
   order, 
   username, 
   onUpdateQuantity, 
@@ -67,7 +67,53 @@ export function OrderSummary({
   hasSubmitted = false,
   onEdit,
   onDelete
-}: OrderSummaryProps) {
+}: OrderSummaryProps) => {
+  const [isEditing, setIsEditing] = useState(false);
+  
+  // 當 hasSubmitted 變化時，重置編輯狀態
+  useEffect(() => {
+    if (!hasSubmitted) {
+      setIsEditing(false);
+    }
+  }, [hasSubmitted]);
+  
+  const handleEdit = () => {
+    setIsEditing(true);
+    onEdit?.();
+  };
+  
+  const handleCancel = () => {
+    setIsEditing(false);
+  };
+  
+  const handleUpdate = () => {
+    setIsEditing(false);
+    const finalOrder = {
+      username,
+      vendorId: order[0]?.vendorId || '',
+      vendorName: order[0]?.vendorName || '',
+      items: order.map(item => ({
+        id: item.id,
+        menuItemId: item.menuItemId,
+        name: item.name,
+        price: item.price,
+        quantity: item.quantity,
+        options: item.options,
+        notes: item.notes
+      })),
+      notes: notes.trim()
+    };
+    
+    onSubmit(finalOrder);
+  };
+  
+  const handleDeleteClick = () => {
+    if (onDelete) {
+      onDelete();
+      setIsEditing(false);
+    }
+  };
+
   // When the component receives an existing order for editing, update the notes field.
   useEffect(() => {
       if (isEditMode && order.length > 0 && order[0].notes) {
@@ -88,32 +134,25 @@ export function OrderSummary({
   }, [order]);
   
   const handleSubmit = () => {
-    if (order.length === 0 || disabled) return;
+    if (order.length === 0) return;
     
-    const finalOrder: Omit<FinalOrder, 'dailyOrderId'> = {
+    const finalOrder = {
       username,
-      vendorId: order[0].vendorId,
-      vendorName: order[0].vendorName,
-      notes: notes.trim(),
-      items: order.map(({ vendorName, vendorId, username, ...item }) => ({
-        ...item,
-        notes: notes.trim()
-      }))
+      vendorId: order[0]?.vendorId || '',
+      vendorName: order[0]?.vendorName || '',
+      items: order.map(item => ({
+        id: item.id,
+        menuItemId: item.menuItemId,
+        name: item.name,
+        price: item.price,
+        quantity: item.quantity,
+        options: item.options,
+        notes: item.notes
+      })),
+      notes: notes.trim()
     };
     
     onSubmit(finalOrder);
-  };
-
-  const handleEdit = () => {
-    if (onEdit) {
-      onEdit();
-    }
-  };
-
-  const handleDelete = () => {
-    if (onDelete) {
-      onDelete();
-    }
   };
 
   return (
@@ -168,51 +207,55 @@ export function OrderSummary({
                   </div>
                   
                   <div className="flex items-center gap-1 ml-2">
-                    <Button 
-                      variant="ghost" 
-                      size="icon" 
-                      className="h-7 w-7 text-muted-foreground hover:text-foreground" 
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        onUpdateQuantity(item.id, item.quantity - 1);
-                      }} 
-                      aria-label={`減少 ${item.name} 數量`} 
-                      disabled={disabled}
-                    >
-                      <MinusCircle className="h-4 w-4" />
-                    </Button>
-                    
-                    <span className="w-6 text-center font-mono text-sm">
-                      {item.quantity}
-                    </span>
-                    
-                    <Button 
-                      variant="ghost" 
-                      size="icon" 
-                      className="h-7 w-7 text-muted-foreground hover:text-foreground" 
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        onUpdateQuantity(item.id, item.quantity + 1);
-                      }} 
-                      aria-label={`增加 ${item.name} 數量`} 
-                      disabled={disabled}
-                    >
-                      <PlusCircle className="h-4 w-4" />
-                    </Button>
-                    
-                    <Button 
-                      variant="ghost" 
-                      size="icon" 
-                      className="h-7 w-7 text-destructive/70 hover:text-destructive" 
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        onRemoveItem(item.id);
-                      }} 
-                      aria-label={`移除 ${item.name}`} 
-                      disabled={disabled}
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
+                    {(!hasSubmitted || isEditing) && (
+                      <>
+                        <Button 
+                          variant="ghost" 
+                          size="icon" 
+                          className="h-7 w-7 text-muted-foreground hover:text-foreground" 
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onUpdateQuantity(item.id, item.quantity - 1);
+                          }} 
+                          aria-label={`減少 ${item.name} 數量`} 
+                          disabled={hasSubmitted && !isEditing}
+                        >
+                          <MinusCircle className="h-4 w-4" />
+                        </Button>
+                        
+                        <span className="w-6 text-center font-mono text-sm">
+                          {item.quantity}
+                        </span>
+                        
+                        <Button 
+                          variant="ghost" 
+                          size="icon" 
+                          className="h-7 w-7 text-muted-foreground hover:text-foreground" 
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onUpdateQuantity(item.id, item.quantity + 1);
+                          }} 
+                          aria-label={`增加 ${item.name} 數量`} 
+                          disabled={hasSubmitted && !isEditing}
+                        >
+                          <PlusCircle className="h-4 w-4" />
+                        </Button>
+                        
+                        <Button 
+                          variant="ghost" 
+                          size="icon" 
+                          className="h-7 w-7 text-destructive/70 hover:text-destructive" 
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onRemoveItem(item.id);
+                          }} 
+                          aria-label={`移除 ${item.name}`} 
+                          disabled={hasSubmitted && !isEditing}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </>
+                    )}
                   </div>
                 </div>
               ))}
@@ -227,7 +270,7 @@ export function OrderSummary({
                   value={notes} 
                   onChange={(e) => setNotes(e.target.value)} 
                   placeholder="例如: 不要辣、餐具一份" 
-                  disabled={disabled}
+                  disabled={disabled || (hasSubmitted && !isEditing)}
                   className="min-h-[80px] text-sm"
                 />
               </div>
@@ -255,6 +298,24 @@ export function OrderSummary({
           >
             {disabled ? "已截止" : (isEditMode ? '確認修改' : '送出訂單')}
           </Button>
+        ) : isEditing ? (
+          <div className="w-full flex gap-2">
+            <Button
+              variant="outline"
+              className="flex-1 bg-background hover:bg-accent/10 text-base py-6 border-2 border-accent/20"
+              onClick={handleCancel}
+              disabled={isSubmitting}
+            >
+              取消
+            </Button>
+            <Button
+              className="flex-1 bg-accent text-accent-foreground hover:bg-accent/90 text-base py-6"
+              onClick={handleUpdate}
+              disabled={isSubmitting || order.length === 0}
+            >
+              {isSubmitting ? '更新中...' : '更新訂單'}
+            </Button>
+          </div>
         ) : (
           <div className="w-full flex gap-2">
             <Button
@@ -268,7 +329,7 @@ export function OrderSummary({
             <Button
               variant="destructive"
               className="flex-1 bg-destructive/90 hover:bg-destructive text-base py-6"
-              onClick={handleDelete}
+              onClick={handleDeleteClick}
               disabled={disabled}
             >
               刪除訂單

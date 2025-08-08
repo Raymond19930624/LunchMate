@@ -1,9 +1,10 @@
-
 "use client";
 
 import { useState, useCallback, useMemo, useEffect, useRef } from "react";
 import { useSearchParams, useRouter } from 'next/navigation';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
+import { type AvailableOrder, submitOrder as createUserOrder, getOrdersByUsername, deleteUserOrder } from "@/ai/flows/order-flow";
+import type { MenuItem } from "@/ai/flows/menu-flow";
 import { Button } from "@/components/ui/button";
 import { OrderSummary, type OrderItem, type FinalOrder } from "@/components/OrderSummary";
 import { cn } from "@/lib/utils";
@@ -18,8 +19,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { type AvailableOrder, submitOrder, getOrdersByUsername, deleteUserOrder } from "@/ai/flows/order-flow";
-import type { MenuItem } from "@/ai/flows/menu-flow";
 import { parse } from 'date-fns';
 
 export type Menu = {
@@ -236,8 +235,12 @@ export function OrderClient({
   const [selectedOrder, setSelectedOrder] = useState<AvailableOrder | null>(null);
   const [order, setOrder] = useState<OrderItem[]>([]);
   const username = searchParams.get('username') || '匿名';
-  const editingOrderId = searchParams.get('edit');
+  const [editingOrderId, setEditingOrderId] = useState<string | null>(searchParams.get('edit'));
   const [hasExistingOrder, setHasExistingOrder] = useState(false);
+  const [isOrderSubmitted, setIsOrderSubmitted] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [showConfirmDialog, setShowConfirmDialog] = useState(false);
+  const [pendingOrder, setPendingOrder] = useState<AvailableOrder | null>(null);
   
   // Hydration-safe state for deadline checking
   const [isPastDeadline, setIsPastDeadline] = useState(false);
@@ -289,8 +292,8 @@ export function OrderClient({
         const hasOrder = !!existingOrder;
         setHasExistingOrder(hasOrder);
         
-        // 如果是編輯模式，加載現有訂單項目
-        if (existingOrder && isEditMode) {
+        // 加載現有訂單項目（無論是否為編輯模式）
+        if (existingOrder) {
           const orderItems = existingOrder.items.map((item: any) => ({
             id: item.id,
             menuItemId: item.menuItemId,
@@ -304,6 +307,11 @@ export function OrderClient({
             notes: item.notes || ''
           }));
           setOrder(orderItems);
+          // 設置訂單已提交狀態
+          setIsOrderSubmitted(true);
+        } else {
+          // 如果沒有現有訂單，確保訂單狀態為未提交
+          setIsOrderSubmitted(false);
         }
       } catch (error) {
         console.error("檢查訂單時出錯:", error);
@@ -366,8 +374,6 @@ export function OrderClient({
       setPendingToast({show: false});
     }
   }, [pendingToast]);
-
-  const [isOrderSubmitted, setIsOrderSubmitted] = useState(false);
 
   // 使用 useRef 來緩存用戶訂單數據
   const userOrdersCache = useRef<{ 
@@ -445,9 +451,11 @@ export function OrderClient({
       
       setOrder(orderItems);
       setHasExistingOrder(true);
+      setIsOrderSubmitted(true);
     } else {
       setOrder([]);
       setHasExistingOrder(false);
+      setIsOrderSubmitted(false);
     }
   };
 
@@ -455,7 +463,7 @@ export function OrderClient({
   const checkUserOrder = useCallback(async (orderId: string, forceRefresh = false) => {
     try {
       // 從緩存或 API 獲取數據
-      const userOrders = await fetchUserOrders(username, orderId, forceRefresh);
+      const userOrders = await getOrdersByUsername(username);
       
       // 處理訂單數據
       updateOrderState(userOrders, orderId);
@@ -473,16 +481,9 @@ export function OrderClient({
       setIsOrderSubmitted(false);
       return false;
     }
-  }, [username, fetchUserOrders]);
-  
+  }, [username]);
 
-
-  const [showConfirmDialog, setShowConfirmDialog] = useState(false);
-  const [pendingOrder, setPendingOrder] = useState<AvailableOrder | null>(null);
-  
-
-
-  // 處理確認切換訂單
+  // 確認切換訂單
   const confirmSwitchOrder = useCallback(async () => {
     if (!pendingOrder) return;
     
@@ -512,8 +513,8 @@ export function OrderClient({
     // 如果是切換到同一個訂單，不做任何操作
     if (selectedOrder?.id === orderToSelect.id) return;
     
-    // 如果購物車中有項目，且切換到不同店家的訂單，則顯示確認對話框
-    if (order.length > 0 && selectedOrder?.vendor.vendorId !== orderToSelect.vendor.vendorId) {
+    // 如果購物車中有項目，且切換到不同店家的訂單，且當前訂單未提交，則顯示確認對話框
+    if (order.length > 0 && selectedOrder?.vendor.vendorId !== orderToSelect.vendor.vendorId && !isOrderSubmitted) {
       setPendingOrder(orderToSelect);
       setShowConfirmDialog(true);
       return;
@@ -543,6 +544,23 @@ export function OrderClient({
     }
   });
 
+  // 從訂單中移除指定項目
+  const handleRemoveItem = useCallback((itemId: string) => {
+    setOrder(prevOrder => {
+      // 過濾掉指定 ID 的項目
+      const newOrder = prevOrder.filter(item => item.id !== itemId);
+      
+      // 如果是最後一個項目，清除訂單狀態
+      if (newOrder.length === 0) {
+        setHasExistingOrder(false);
+        setIsOrderSubmitted(false);
+      }
+      
+      return newOrder;
+    });
+  }, []);
+
+  // 添加項目到訂單
   const handleAddToOrder = useCallback((orderDetail: OrderItem) => {
     setOrder(prevOrder => {
       try {
@@ -660,8 +678,8 @@ export function OrderClient({
     });
   }, [isEditMode, editingOrderId, username, toast]);
 
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  
+  // 狀態變量已經在組件頂部聲明，這裡不需要重複聲明
+
   // 將 checkExistingOrder 函數移到組件頂部，使其可以被其他函數引用
   const checkExistingOrder = useCallback(async () => {
     if (!username || !selectedOrder) return;
@@ -738,74 +756,50 @@ export function OrderClient({
     try {
       setIsSubmitting(true);
       
-      // 檢查是否為編輯模式（通過 URL 參數或 props）
-      const isEditing = isEditMode || !!editingOrderId;
-      
-      // 準備訂單數據
-      const orderData: FinalOrder = {
-        ...finalOrder,
-        dailyOrderId: isEditing && editingOrderId ? editingOrderId : selectedOrder.id,
-        vendorId: selectedOrder.vendor.vendorId,
-        vendorName: selectedOrder.vendor.vendorName,
-        notes: finalOrder.notes || ''
-      };
-      
-      // 提交訂單
-      await submitOrder(orderData);
-      
-      // 更新 hasExistingOrder 狀態
-      setHasExistingOrder(true);
-      
-      // 清除緩存，強制下次重新加載
-      clearOrderCache(selectedOrder.id);
-      
-      // 顯示簡潔的成功訊息
-      toast({ 
-        title: isEditing ? "訂單已更新！" : "訂單已送出！", 
-        description: isEditing 
-          ? `已成功更新 ${selectedOrder.vendor.vendorName} 的訂單`
-          : `已成功送出 ${selectedOrder.vendor.vendorName} 的訂單`
-      });
-      
-      // 設置訂單已提交狀態，允許切換到其他訂單
-      setIsOrderSubmitted(true);
-      
-      // 如果是編輯模式，重新加載訂單以顯示最新狀態
-      if (isEditing) {
-        checkExistingOrder();
+      // 如果是編輯模式或已有訂單，先刪除舊的訂單
+      if (editingOrderId || hasExistingOrder) {
+        await deleteUserOrder({ 
+          dailyOrderId: editingOrderId || selectedOrder.id, 
+          username 
+        });
       }
       
-    } catch (error) {
-      console.error("訂單提交錯誤:", error);
+      // 創建新訂單
+      await createUserOrder({
+        ...finalOrder,
+        dailyOrderId: selectedOrder.id
+      });
+      
+      // 更新本地狀態
+      setHasExistingOrder(true);
+      setIsOrderSubmitted(true);
+      
+      // 顯示成功訊息
       toast({
-        variant: "destructive",
-        title: "送出訂單時發生錯誤",
-        description: error instanceof Error ? error.message : "請稍後再試"
+        title: '訂單已送出',
+        description: `已成功${editingOrderId || hasExistingOrder ? '更新' : '送出'} ${selectedOrder.vendor.vendorName} 的訂單`,
+        variant: 'default'
+      });
+      
+      // 清除編輯狀態
+      setEditingOrderId(null);
+      
+      // 清除緩存，強制重新載入訂單數據
+      clearOrderCache(selectedOrder.id);
+      
+      // 重新加載訂單數據
+      await checkUserOrder(selectedOrder.id, true);
+      
+    } catch (error) {
+      console.error('送出訂單時出錯:', error);
+      toast({
+        variant: 'destructive',
+        title: '送出訂單失敗',
+        description: error instanceof Error ? error.message : '請稍後再試',
       });
     } finally {
       setIsSubmitting(false);
     }
-  }, [selectedOrder, isEditMode, editingOrderId, submitOrder, setOrder, toast, checkExistingOrder]);
-
-  const handleRemoveItem = useCallback((itemId: string) => {
-    setOrder(prevOrder => {
-      const removedItem = prevOrder.find(item => item.id === itemId);
-      if (!removedItem) return prevOrder;
-      
-      const newOrder = prevOrder.filter(item => item.id !== itemId);
-      const isEditing = isEditMode || !!editingOrderId;
-      
-      // 顯示已移除項目的提示
-      if (isEditing) {
-        toast({
-          title: "已移除項目",
-          description: `已從訂單中移除 ${removedItem.name}`,
-          variant: "default"
-        });
-      }
-      
-      return newOrder;
-    });
   }, [isEditMode, editingOrderId, toast]);
 
   const selectedMenu = useMemo(() => {
@@ -922,7 +916,7 @@ export function OrderClient({
                  <Card className="flex flex-col items-center justify-center p-12 text-center text-blue-700 bg-blue-50 border-blue-200">
                     <CheckCircle2 className="h-16 w-16 mb-4 text-blue-600" />
                     <h3 className="font-headline text-xl font-bold mb-2">您已經訂購過此訂單</h3>
-                    <p className="font-body text-sm">請在當前頁面直接修改訂單</p>
+                    <p className="font-body text-sm">請點選編輯訂單修改品項</p>
                  </Card>
               ) : (
                  <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-6">
@@ -964,8 +958,8 @@ export function OrderClient({
                 })));
               }}
               isEditMode={isEditMode || !!editingOrderId}
-              disabled={isPastDeadline || (hasExistingOrder && !isEditMode)}
-              hasSubmitted={hasExistingOrder}
+              disabled={isPastDeadline}
+              hasSubmitted={isOrderSubmitted}
               onEdit={() => {
                 // 啟用編輯模式
                 if (selectedOrder) {
