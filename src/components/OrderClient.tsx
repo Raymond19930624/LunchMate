@@ -3,7 +3,7 @@
 import { useState, useCallback, useMemo, useEffect, useRef } from "react";
 import { useSearchParams, useRouter } from 'next/navigation';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
-import { type AvailableOrder, submitOrder as createUserOrder, getOrdersByUsername, deleteUserOrder } from "@/ai/flows/order-flow";
+import { type AvailableOrder, submitOrder, getOrdersByUsername, deleteUserOrder } from "@/ai/flows/order-flow";
 import type { MenuItem } from "@/ai/flows/menu-flow";
 import { Button } from "@/components/ui/button";
 import { OrderSummary, type OrderItem, type FinalOrder } from "@/components/OrderSummary";
@@ -279,51 +279,52 @@ export function OrderClient({
         // 從緩存中查找訂單
         const userOrders = ordersCache.current[username] || [];
         const existingOrder = userOrders.find(
-          (orderGroup: any) => 
-            orderGroup.dailyOrder && 
-            orderGroup.dailyOrder.id === orderId && 
-            orderGroup.dailyOrder.status !== 'cancelled' &&
-            orderGroup.items.length > 0
+          (orderGroup: any) => orderGroup.dailyOrder
         );
         
-        // 更新緩存
-        ordersCache.current[orderId] = existingOrder || null;
-        
-        const hasOrder = !!existingOrder;
-        setHasExistingOrder(hasOrder);
-        
-        // 加載現有訂單項目（無論是否為編輯模式）
         if (existingOrder) {
           const orderItems = existingOrder.items.map((item: any) => ({
-            id: item.id,
+            id: item.menuItemId,
             menuItemId: item.menuItemId,
             name: item.itemName,
             price: item.price,
             quantity: item.quantity,
-            vendorName: selectedOrder.vendor.vendorName,
-            vendorId: selectedOrder.vendor.vendorId,
-            username: username,
-            options: item.options || {},
-            notes: item.notes || ''
-          }));
+            options: item.options,
+            notes: item.notes || '',
+            vendorId: item.vendorId,
+            vendorName: item.vendorName,
+            username: username
+          } as OrderItem));
+
           setOrder(orderItems);
-          // 設置訂單已提交狀態
+          setHasExistingOrder(true);
           setIsOrderSubmitted(true);
+          
+          // 更新緩存
+          ordersCache.current[orderId] = true;
         } else {
-          // 如果沒有現有訂單，確保訂單狀態為未提交
+          setOrder([]);
+          setHasExistingOrder(false);
           setIsOrderSubmitted(false);
+          
+          // 更新緩存
+          ordersCache.current[orderId] = false;
         }
       } catch (error) {
-        console.error("檢查訂單時出錯:", error);
+        console.error('檢查現有訂單時出錯:', error);
+        setOrder([]);
+        setHasExistingOrder(false);
+        setIsOrderSubmitted(false);
       } finally {
         // 清除加載狀態
-        setIsLoadingOrders(prev => ({ ...prev, [orderId]: false }));
+        setIsLoadingOrders(prev => ({
+          ...prev,
+          [orderId]: false
+        }));
       }
     };
     
-    if (selectedOrder) {
-      checkExistingOrder();
-    }
+    checkExistingOrder();
   }, [selectedOrder, username, isEditMode]);
 
   // This effect runs once on mount to set the initial order, aggregating if needed.
@@ -680,6 +681,49 @@ export function OrderClient({
 
   // 狀態變量已經在組件頂部聲明，這裡不需要重複聲明
 
+  // 保存訂單到本地存儲
+  const saveOrderToLocalStorage = useCallback((orderId: string, data: any) => {
+    try {
+      const key = `order_${orderId}_${username}`;
+      localStorage.setItem(key, JSON.stringify({
+        ...data,
+        timestamp: new Date().getTime()
+      }));
+    } catch (error) {
+      console.error('保存訂單到本地存儲失敗:', error);
+    }
+  }, [username]);
+
+  // 從本地存儲加載訂單
+  const loadOrderFromLocalStorage = useCallback((orderId: string) => {
+    try {
+      const key = `order_${orderId}_${username}`;
+      const data = localStorage.getItem(key);
+      if (data) {
+        const parsed = JSON.parse(data);
+        // 檢查是否在24小時內保存的
+        if (new Date().getTime() - parsed.timestamp < 24 * 60 * 60 * 1000) {
+          return parsed;
+        }
+        // 如果超過24小時，刪除舊數據
+        localStorage.removeItem(key);
+      }
+    } catch (error) {
+      console.error('從本地存儲加載訂單失敗:', error);
+    }
+    return null;
+  }, [username]);
+
+  // 從本地存儲刪除訂單
+  const removeOrderFromLocalStorage = useCallback((orderId: string) => {
+    try {
+      const key = `order_${orderId}_${username}`;
+      localStorage.removeItem(key);
+    } catch (error) {
+      console.error('從本地存儲刪除訂單失敗:', error);
+    }
+  }, [username]);
+
   // 將 checkExistingOrder 函數移到組件頂部，使其可以被其他函數引用
   const checkExistingOrder = useCallback(async () => {
     if (!username || !selectedOrder) return;
@@ -696,6 +740,19 @@ export function OrderClient({
       // 設置加載狀態
       setIsLoadingOrders(prev => ({ ...prev, [orderId]: true }));
       
+      // 首先嘗試從本地存儲加載
+      const localOrder = loadOrderFromLocalStorage(orderId);
+      
+      if (localOrder) {
+        console.log('從本地存儲加載訂單:', localOrder);
+        setHasExistingOrder(localOrder.hasExistingOrder);
+        setIsOrderSubmitted(localOrder.isOrderSubmitted);
+        if (localOrder.order && localOrder.order.length > 0) {
+          setOrder(localOrder.order);
+        }
+        return;
+      }
+      
       // 如果沒有緩存，則從 API 獲取數據
       if (!ordersCache.current[username]) {
         const orders = await getOrdersByUsername(username);
@@ -708,7 +765,8 @@ export function OrderClient({
       );
       
       // 更新狀態
-      setHasExistingOrder(!!userOrder);
+      const hasOrder = !!userOrder;
+      setHasExistingOrder(hasOrder);
       
       // 如果是編輯模式，加載現有訂單
       if (isEditMode && userOrder) {
@@ -724,7 +782,22 @@ export function OrderClient({
           options: item.options || {},
           notes: item.notes || ''
         }));
+        
         setOrder(orderItems);
+        // 設置訂單已提交狀態
+        setIsOrderSubmitted(true);
+        
+        // 保存到本地存儲
+        saveOrderToLocalStorage(orderId, {
+          hasExistingOrder: true,
+          isOrderSubmitted: true,
+          order: orderItems
+        });
+      } else if (!hasOrder) {
+        // 如果沒有現有訂單，確保訂單狀態為未提交
+        setIsOrderSubmitted(false);
+        // 清除本地存儲
+        removeOrderFromLocalStorage(orderId);
       }
     } catch (error) {
       console.error("檢查訂單時出錯:", error);
@@ -743,64 +816,163 @@ export function OrderClient({
 
 
   const handleSubmitOrder = useCallback(async (finalOrder: Omit<FinalOrder, 'dailyOrderId'>) => {
+    console.log('handleSubmitOrder called with:', { 
+      finalOrder, 
+      selectedOrder, 
+      editingOrderId, 
+      hasExistingOrder, 
+      username,
+      availableOrders: availableOrders?.length,
+      isEditMode
+    });
+    
+    // 確保 selectedOrder 存在
     if (!selectedOrder) {
-      toast({ variant: "destructive", title: "錯誤", description: "請選擇一個有效的訂單" });
+      console.error('No selected order', { 
+        selectedOrder, 
+        availableOrders: availableOrders?.map(o => o.id),
+        isEditMode,
+        orderIdToEdit
+      });
+      
+      // 如果是在編輯模式但沒有 selectedOrder，嘗試從 availableOrders 中獲取
+      if (isEditMode && orderIdToEdit && availableOrders?.length) {
+        const orderToEdit = availableOrders.find(o => o.id === orderIdToEdit);
+        if (orderToEdit) {
+          console.log('Found order to edit from availableOrders:', orderToEdit);
+          setSelectedOrder(orderToEdit);
+          // 短暫延遲後重試提交
+          setTimeout(() => handleSubmitOrder(finalOrder), 100);
+          return;
+        }
+      }
+      
+      toast({ 
+        variant: "destructive", 
+        title: "錯誤", 
+        description: "無法找到有效的訂單，請刷新頁面後重試" 
+      });
       return;
     }
     
-    if (finalOrder.items.length === 0) {
+    // 確保 finalOrder 包含所有必需的字段
+    const orderToSubmit: FinalOrder = {
+      ...finalOrder,
+      dailyOrderId: selectedOrder.id,
+      username: finalOrder.username || username, // 使用傳入的 username 或組件中的 username
+      vendorId: finalOrder.vendorId || selectedOrder.vendor?.vendorId,
+      vendorName: finalOrder.vendorName || selectedOrder.vendor?.vendorName,
+      items: finalOrder.items.map(item => ({
+        ...item,
+        options: item.options || {},
+        notes: item.notes || ''
+      })),
+      notes: finalOrder.notes || ''
+    };
+    
+    console.log('Submitting order with data:', orderToSubmit);
+    
+    if (orderToSubmit.items.length === 0) {
+      console.error('Order is empty');
       toast({ variant: "destructive", title: "訂單是空的", description: "請先選擇餐點再送出訂單。" });
       return;
     }
     
     try {
+      console.log('Setting isSubmitting to true');
       setIsSubmitting(true);
       
       // 如果是編輯模式或已有訂單，先刪除舊的訂單
       if (editingOrderId || hasExistingOrder) {
-        await deleteUserOrder({ 
+        console.log('Deleting existing order:', { 
+          dailyOrderId: editingOrderId || selectedOrder.id, 
+          username,
+          isEditMode,
+          hasExistingOrder
+        });
+        
+        const deleteResult = await deleteUserOrder({ 
           dailyOrderId: editingOrderId || selectedOrder.id, 
           username 
         });
+        
+        console.log('Delete order result:', deleteResult);
+        
+        if (!deleteResult.success) {
+          console.warn('Failed to delete existing order, but continuing with submission');
+        }
+      }
+
+      // 提交新訂單
+      console.log('Submitting order:', orderToSubmit);
+      const submitResult = await submitOrder(orderToSubmit);
+      console.log('Submit order result:', submitResult);
+      
+      if (!submitResult.success) {
+        throw new Error(submitResult.error || 'Failed to submit order');
       }
       
-      // 創建新訂單
-      await createUserOrder({
-        ...finalOrder,
-        dailyOrderId: selectedOrder.id
-      });
-      
-      // 更新本地狀態
+      console.log('Updating local state');
       setHasExistingOrder(true);
       setIsOrderSubmitted(true);
       
-      // 顯示成功訊息
+      // 保存到本地存儲
+      saveOrderToLocalStorage(selectedOrder.id, {
+        hasExistingOrder: true,
+        isOrderSubmitted: true,
+        order: orderToSubmit.items
+      });
+      
+      // 清除訂單緩存，強制下次重新加載
+      clearOrderCache();
+      
       toast({
         title: '訂單已送出',
-        description: `已成功${editingOrderId || hasExistingOrder ? '更新' : '送出'} ${selectedOrder.vendor.vendorName} 的訂單`,
-        variant: 'default'
+        description: `已成功${editingOrderId || hasExistingOrder ? '更新' : '送出'} ${orderToSubmit.vendorName || '訂單'}`,
+        variant: "default"
       });
       
-      // 清除編輯狀態
-      setEditingOrderId(null);
+      // 如果是編輯模式，重置編輯狀態
+      if (editingOrderId) {
+        setEditingOrderId(null);
+        router.push(`/order`);
+      }
       
-      // 清除緩存，強制重新載入訂單數據
-      clearOrderCache(selectedOrder.id);
-      
-      // 重新加載訂單數據
-      await checkUserOrder(selectedOrder.id, true);
+      // 清除訂單快取並重新載入訂單數據
+      console.log('Clearing order cache');
+      if (selectedOrder?.id) {
+        clearOrderCache(selectedOrder.id);
+        console.log('Reloading order data');
+        await checkUserOrder(selectedOrder.id, true);
+      }
       
     } catch (error) {
-      console.error('送出訂單時出錯:', error);
-      toast({
-        variant: 'destructive',
-        title: '送出訂單失敗',
-        description: error instanceof Error ? error.message : '請稍後再試',
+      console.error('Error submitting order:', error);
+      
+      // 顯示更具體的錯誤信息
+      let errorMessage = "訂單送出時發生錯誤，請稍後再試。";
+      if (error instanceof Error) {
+        if (error.message.includes('permission')) {
+          errorMessage = "權限不足，請確認您已登入並有權限執行此操作。";
+        } else if (error.message.includes('network')) {
+          errorMessage = "網路連接出現問題，請檢查您的網路連線後重試。";
+        } else {
+          errorMessage = error.message;
+        }
+      }
+      
+      toast({ 
+        variant: "destructive", 
+        title: "送出失敗", 
+        description: errorMessage,
+        duration: 5000
       });
+      
     } finally {
+      console.log('Setting isSubmitting to false');
       setIsSubmitting(false);
     }
-  }, [isEditMode, editingOrderId, toast]);
+  }, [isEditMode, editingOrderId, toast, selectedOrder, hasExistingOrder, username, availableOrders, orderIdToEdit, clearOrderCache, checkUserOrder]);
 
   const selectedMenu = useMemo(() => {
     if (!selectedOrder) return [];
@@ -978,9 +1150,16 @@ export function OrderClient({
                     description: `已成功刪除 ${selectedOrder.vendor.vendorName} 的訂單`,
                     variant: "default"
                   });
-                  // 重新加載頁面或更新狀態
+                  // 重置訂單狀態
                   setOrder([]);
                   setHasExistingOrder(false);
+                  setIsOrderSubmitted(false);
+                  setEditingOrderId(null);
+                  
+                  // 如果是在編輯模式，則返回訂單列表
+                  if (isEditMode || editingOrderId) {
+                    router.push(`/order?username=${encodeURIComponent(username)}`);
+                  }
                 } catch (error) {
                   console.error("刪除訂單時出錯:", error);
                   toast({

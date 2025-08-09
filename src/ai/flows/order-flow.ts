@@ -361,33 +361,62 @@ export async function deleteDailyOrder(dailyOrderId: string): Promise<{ success:
  * @param {boolean} isEditing - A flag to indicate if this is an edit.
  * @returns {Promise<{success: boolean}>} A success flag.
  */
-export async function submitOrder(order: FinalOrder, isEditing: boolean = false): Promise<{ success: boolean }> {
-    if (isEditing) {
-        // 1. 首先刪除該用戶在該日訂單中的所有現有項目
-        await deleteUserOrder({ 
-            username: order.username, 
-            dailyOrderId: order.dailyOrderId 
-        });
+export const submitOrder = async (order: FinalOrder, isEditing: boolean = false): Promise<{ success: boolean; error?: string }> => {
+    try {
+        console.log('submitOrder called with:', { order, isEditing });
+        
+        if (isEditing) {
+            console.log('Editing existing order');
+            // 1. 首先刪除該用戶在該日訂單中的所有現有項目
+            const deleteResult = await deleteUserOrder({ 
+                username: order.username, 
+                dailyOrderId: order.dailyOrderId 
+            });
+            
+            console.log('deleteUserOrder result:', deleteResult);
 
-        // 2. 如果沒有新的訂單項目，直接返回成功
-        if (order.items.length === 0) {
-            return { success: true };
+            // 2. 如果沒有新的訂單項目，直接返回成功
+            if (order.items.length === 0) {
+                console.log('No items to add after deletion, returning success');
+                return { success: true };
+            }
         }
 
         // 3. 添加新的訂單項目
+        console.log('Preparing to add new order items');
         const allItemsRange = `${ORDER_ITEMS_SHEET_NAME}!A2:A`;
+        console.log('Fetching existing item IDs from sheet');
         const allItemIdsData = await getSheetData(SPREADSHEET_ID, allItemsRange);
+        console.log('Existing item IDs data:', allItemIdsData);
+        
         let lastIdNum = allItemIdsData.length > 0
-            ? Math.max(0, ...allItemIdsData.map(row => parseInt((row[0] || 'oi0').replace('oi', ''), 10)).filter(num => !isNaN(num)))
+            ? Math.max(0, ...allItemIdsData.map(row => {
+                const id = (row && row[0]) || 'oi0';
+                const num = parseInt(id.replace('oi', ''), 10);
+                return isNaN(num) ? 0 : num;
+            }))
             : 0;
+        
+        console.log('Last ID number:', lastIdNum);
         
         const now = new Date().toISOString();
         const orderValues = [];
 
+        console.log('Processing order items:', order.items);
         for (const item of order.items) {
             lastIdNum++;
             const newId = `oi${lastIdNum.toString().padStart(3, '0')}`;
             const optionsString = JSON.stringify(item.options || {});
+
+            console.log('Adding order item:', {
+                newId,
+                dailyOrderId: order.dailyOrderId,
+                menuItemId: item.menuItemId,
+                name: item.name,
+                quantity: item.quantity,
+                price: item.price,
+                options: optionsString
+            });
 
             orderValues.push([
                 newId,
@@ -406,55 +435,42 @@ export async function submitOrder(order: FinalOrder, isEditing: boolean = false)
             ]);
         }
 
-        if (orderValues.length > 0) {
-            await appendSheetData(SPREADSHEET_ID, `${ORDER_ITEMS_SHEET_NAME}!A:M`, orderValues);
-        }
-        
-        return { success: true };
-    } else {
-        // 新增訂單的邏輯保持不變
-        const allItemsRange = `${ORDER_ITEMS_SHEET_NAME}!A2:A`;
-        const allItemIdsData = await getSheetData(SPREADSHEET_ID, allItemsRange);
-        let lastIdNum = allItemIdsData.length > 0
-            ? Math.max(0, ...allItemIdsData.map(row => parseInt((row[0] || 'oi0').replace('oi', ''), 10)).filter(num => !isNaN(num)))
-            : 0;
-
-        const now = new Date().toISOString();
-        const orderValues = [];
-
-        for (const item of order.items) {
-            lastIdNum++;
-            const newId = `oi${lastIdNum.toString().padStart(3, '0')}`;
-            const optionsString = JSON.stringify(item.options);
-
-            orderValues.push([
-                newId,
-                order.dailyOrderId,
-                now,
-                order.username,
-                order.vendorId,
-                order.vendorName,
-                item.menuItemId,
-                item.name,
-                item.quantity,
-                item.price,
-                optionsString,
-                order.notes,
-                'FALSE' // isPaid
-            ]);
-        }
-        
-        // Ensure headers exist
+        // 確保表頭存在
+        console.log('Checking/creating sheet headers');
         const headers = await getHeaders(SPREADSHEET_ID, ORDER_ITEMS_SHEET_NAME);
+        console.log('Existing headers:', headers);
+        
         if (headers.length === 0) {
-            await updateSheetData(SPREADSHEET_ID, `${ORDER_ITEMS_SHEET_NAME}!A1:M1`, [['id', 'dailyOrderId', 'timestamp', 'username', 'vendorId', 'vendorName', 'menuItemId', 'itemName', 'quantity', 'price', 'options', 'notes', 'isPaid']]);
+            console.log('No headers found, creating headers');
+            const headerResult = await updateSheetData(
+                SPREADSHEET_ID, 
+                `${ORDER_ITEMS_SHEET_NAME}!A1:M1`, 
+                [['id', 'dailyOrderId', 'timestamp', 'username', 'vendorId', 'vendorName', 'menuItemId', 'itemName', 'quantity', 'price', 'options', 'notes', 'isPaid']]
+            );
+            console.log('Header creation result:', headerResult);
         }
 
         if (orderValues.length > 0) {
-            await appendSheetData(SPREADSHEET_ID, `${ORDER_ITEMS_SHEET_NAME}!A:M`, orderValues);
+            console.log(`Appending ${orderValues.length} order items to sheet`);
+            const appendResult = await appendSheetData(
+                SPREADSHEET_ID, 
+                `${ORDER_ITEMS_SHEET_NAME}!A:M`, 
+                orderValues
+            );
+            console.log('Append result:', appendResult);
+        } else {
+            console.log('No order items to append');
         }
         
+        console.log('Order submission successful');
         return { success: true };
+        
+    } catch (error) {
+        console.error('Error in submitOrder:', error);
+        return { 
+            success: false, 
+            error: error instanceof Error ? error.message : 'Unknown error occurred' 
+        };
     }
 }
 
