@@ -82,14 +82,14 @@ function UserOrderCard({ userOrder, onPaymentUpdate, onOrderUpdate, deadline }: 
                 await markUserOrderAsPaid({ dailyOrderId, username, isPaid });
                 onPaymentUpdate(username, isPaid); // Update local state instead of full refetch
                 toast({
-                    title: "付款狀態已更新",
-                    description: `${username} 的訂單已標示為 ${isPaid ? '已付款' : '未付款'}。`,
+                    title: "收款狀態已更新",
+                    description: `${username} 的訂單已標示為 ${isPaid ? '已收款' : '未收款'}。`,
                 });
             } catch (error) {
                  toast({
                     variant: "destructive",
                     title: "更新失敗",
-                    description: error instanceof Error ? error.message : "無法更新付款狀態。",
+                    description: error instanceof Error ? error.message : "無法更新收款狀態。",
                 });
             }
         });
@@ -158,7 +158,7 @@ function UserOrderCard({ userOrder, onPaymentUpdate, onOrderUpdate, deadline }: 
                         <Label htmlFor={`payment-status-${userOrder.username}`}>
                             <Badge variant={userOrder.isPaid ? "default" : "secondary"}>
                                 {isPending && <Loader2 className="mr-1 h-3 w-3 animate-spin" />}
-                                {userOrder.isPaid ? "已付款" : "未付款"}
+                                {userOrder.isPaid ? "已收款" : "未收款"}
                             </Badge>
                         </Label>
                     </div>

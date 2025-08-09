@@ -243,6 +243,7 @@ export function OrderClient({
   const [pendingOrder, setPendingOrder] = useState<AvailableOrder | null>(null);
   const [isEditing, setIsEditing] = useState(false); // 本地編輯模式狀態
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false); // 刪除確認對話框狀態
+  const [isOrderPaid, setIsOrderPaid] = useState(false); // 訂單付款狀態
   
   // Hydration-safe state for deadline checking
   const [isPastDeadline, setIsPastDeadline] = useState(false);
@@ -285,6 +286,10 @@ export function OrderClient({
         );
         
         if (existingOrder) {
+          // 檢查訂單是否已付款（如果所有項目都已付款則視為已付款）
+          const paid = existingOrder.items.every((item: any) => item.isPaid);
+          setIsOrderPaid(paid);
+          
           const orderItems = existingOrder.items.map((item: any) => ({
             id: item.menuItemId,
             menuItemId: item.menuItemId,
@@ -295,7 +300,8 @@ export function OrderClient({
             notes: item.notes || '',
             vendorId: item.vendorId,
             vendorName: item.vendorName,
-            username: username
+            username: username,
+            isPaid: item.isPaid || false
           } as OrderItem));
 
           setOrder(orderItems);
@@ -919,9 +925,6 @@ export function OrderClient({
       }
       
       console.log('Updating local state');
-      setHasExistingOrder(true);
-      setIsOrderSubmitted(true);
-      
       // 更新狀態
       setHasExistingOrder(true);
       setIsOrderSubmitted(true);
@@ -934,7 +937,10 @@ export function OrderClient({
       });
       
       // 清除訂單緩存，強制下次重新加載
-      clearOrderCache();
+      if (selectedOrder?.id) {
+        const cacheKey = `${username}-${selectedOrder.id}`;
+        delete userOrdersCache.current[cacheKey];
+      }
       
       // 顯示成功提示
       toast({
@@ -1085,25 +1091,48 @@ export function OrderClient({
           </section>
 
           {/* Menu Display */}
-          {selectedOrder && (
+          {selectedOrder ? (
             <section>
-              <h2 className="font-headline text-2xl font-bold mb-4">
-                {isEditMode ? '編輯訂單 - ' : ''}{selectedOrder.vendor.vendorName} 菜單
-              </h2>
-              {isPastDeadline ? (
-                 <Card className="flex flex-col items-center justify-center p-12 text-center text-destructive bg-destructive/10 border-destructive/50">
+              <div className="flex flex-col space-y-4 mb-6">
+                <div className="flex items-center justify-between">
+                  <h2 className="font-headline text-2xl font-bold">
+                    {isEditMode ? '編輯訂單 - ' : ''}{selectedOrder.vendor.vendorName} 菜單
+                  </h2>
+                  {hasExistingOrder && !isEditMode && !editingOrderId && !isEditing && (
+                    <Badge className={`ml-2 ${isOrderPaid ? 'bg-green-100 text-green-800 border-green-200' : 'bg-amber-100 text-amber-800 border-amber-200'}`}>
+                      {isOrderPaid ? (
+                        <>
+                          <CheckCircle2 className="h-3 w-3 mr-1" /> 已收款
+                        </>
+                      ) : (
+                        <>
+                          <Clock className="h-3 w-3 mr-1" /> 未收款
+                        </>
+                      )}
+                    </Badge>
+                  )}
+                </div>
+                
+                {isPastDeadline ? (
+                  <Card className="flex flex-col items-center justify-center p-8 text-center text-destructive bg-destructive/10 border-destructive/50">
                     <Ban className="h-16 w-16 mb-4" />
                     <h3 className="font-headline text-xl font-bold mb-2">訂購已截止</h3>
                     <p className="font-body text-sm">此店家的訂購時間已過，無法再修改訂單。</p>
-                 </Card>
-              ) : hasExistingOrder && !isEditMode && !editingOrderId && !isEditing ? (
-                 <Card className="flex flex-col items-center justify-center p-12 text-center text-blue-700 bg-blue-50 border-blue-200">
-                    <CheckCircle2 className="h-16 w-16 mb-4 text-blue-600" />
-                    <h3 className="font-headline text-xl font-bold mb-2">您已經訂購過此訂單</h3>
-                    <p className="font-body text-sm">請點選編輯訂單修改品項</p>
-                 </Card>
-              ) : (
-                 <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-6">
+                  </Card>
+                ) : hasExistingOrder && !isEditMode && !editingOrderId && !isEditing ? (
+                  <Card className="flex flex-col items-center justify-center p-8 text-center text-blue-700 bg-blue-50 border-blue-200">
+                    <div className="flex flex-col items-center justify-center space-y-4">
+                      <CheckCircle2 className="h-16 w-16 text-blue-600" />
+                      <h3 className="font-headline text-xl font-bold">您已經訂購過此訂單</h3>
+                      <p className="font-body text-sm">
+                        {isOrderPaid 
+                          ? '您的訂單已付款，如有問題請聯繫管理者。' 
+                          : '可點選編輯訂單修改品項'}
+                      </p>
+                    </div>
+                  </Card>
+                ) : (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-6">
                     {selectedMenu.length > 0 ? selectedMenu.map((item) => (
                       <MenuItemCard 
                         key={item.id} 
@@ -1116,10 +1145,11 @@ export function OrderClient({
                     )) : (
                       <p className="text-sm text-muted-foreground col-span-full">這個店家還沒有任何菜單品項，請管理者新增。</p>
                     )}
-                 </div>
-              )}
+                  </div>
+                )}
+              </div>
             </section>
-          )}
+          ) : null}
         </div>
 
         {/* Order Summary */}
@@ -1142,16 +1172,51 @@ export function OrderClient({
                 })));
               }}
               isEditMode={isEditMode || !!editingOrderId || isEditing}
-              disabled={isPastDeadline && !isEditing}
+              disabled={isPastDeadline || isOrderPaid}
               hasSubmitted={isOrderSubmitted}
               onEdit={() => {
+                // 檢查是否已付款或已截止
+                if (isOrderPaid) {
+                  toast({
+                    title: "無法編輯訂單",
+                    description: "此訂單已付款，無法進行編輯。",
+                    variant: "destructive"
+                  });
+                  return;
+                }
+                if (isPastDeadline) {
+                  toast({
+                    title: "無法編輯訂單",
+                    description: "訂購時間已截止，無法進行編輯。",
+                    variant: "destructive"
+                  });
+                  return;
+                }
                 // 切換編輯模式
                 setIsEditing(!isEditing);
               }}
               onDelete={() => {
-                if (selectedOrder) {
-                  setShowDeleteConfirm(true);
+                if (!selectedOrder) return;
+                
+                // 檢查是否已付款或已截止
+                if (isOrderPaid) {
+                  toast({
+                    title: "無法刪除訂單",
+                    description: "此訂單已付款，無法進行刪除。",
+                    variant: "destructive"
+                  });
+                  return;
                 }
+                if (isPastDeadline) {
+                  toast({
+                    title: "無法刪除訂單",
+                    description: "訂購時間已截止，無法進行刪除。",
+                    variant: "destructive"
+                  });
+                  return;
+                }
+                
+                setShowDeleteConfirm(true);
               }}
             />
           </div>
