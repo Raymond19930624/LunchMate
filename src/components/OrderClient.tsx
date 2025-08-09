@@ -10,7 +10,7 @@ import { OrderSummary, type OrderItem, type FinalOrder } from "@/components/Orde
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 import { Badge } from "./ui/badge";
-import { Utensils, MinusCircle, PlusCircle, ShoppingCart, Clock, Ban, CheckCircle2, CalendarClock } from "lucide-react";
+import { Utensils, MinusCircle, PlusCircle, ShoppingCart, Clock, Ban, CheckCircle2, CalendarClock, AlertTriangle } from "lucide-react";
 import { Label } from "./ui/label";
 import {
   Select,
@@ -241,6 +241,8 @@ export function OrderClient({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showConfirmDialog, setShowConfirmDialog] = useState(false);
   const [pendingOrder, setPendingOrder] = useState<AvailableOrder | null>(null);
+  const [isEditing, setIsEditing] = useState(false); // 本地編輯模式狀態
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false); // 刪除確認對話框狀態
   
   // Hydration-safe state for deadline checking
   const [isPastDeadline, setIsPastDeadline] = useState(false);
@@ -823,8 +825,12 @@ export function OrderClient({
       hasExistingOrder, 
       username,
       availableOrders: availableOrders?.length,
-      isEditMode
+      isEditMode,
+      isEditing
     });
+    
+    // 如果是本地編輯模式，提交後不立即退出編輯模式，等提交成功後再退出
+    // 這樣可以避免在異步操作完成前就切換狀態
     
     // 確保 selectedOrder 存在
     if (!selectedOrder) {
@@ -916,6 +922,10 @@ export function OrderClient({
       setHasExistingOrder(true);
       setIsOrderSubmitted(true);
       
+      // 更新狀態
+      setHasExistingOrder(true);
+      setIsOrderSubmitted(true);
+      
       // 保存到本地存儲
       saveOrderToLocalStorage(selectedOrder.id, {
         hasExistingOrder: true,
@@ -926,17 +936,19 @@ export function OrderClient({
       // 清除訂單緩存，強制下次重新加載
       clearOrderCache();
       
+      // 顯示成功提示
       toast({
         title: '訂單已送出',
         description: `已成功${editingOrderId || hasExistingOrder ? '更新' : '送出'} ${orderToSubmit.vendorName || '訂單'}`,
         variant: "default"
       });
       
-      // 如果是編輯模式，重置編輯狀態
+      // 重置編輯狀態
       if (editingOrderId) {
         setEditingOrderId(null);
-        router.push(`/order`);
       }
+      // 確保退出編輯模式
+      setIsEditing(false);
       
       // 清除訂單快取並重新載入訂單數據
       console.log('Clearing order cache');
@@ -1084,7 +1096,7 @@ export function OrderClient({
                     <h3 className="font-headline text-xl font-bold mb-2">訂購已截止</h3>
                     <p className="font-body text-sm">此店家的訂購時間已過，無法再修改訂單。</p>
                  </Card>
-              ) : hasExistingOrder && !isEditMode && !editingOrderId ? (
+              ) : hasExistingOrder && !isEditMode && !editingOrderId && !isEditing ? (
                  <Card className="flex flex-col items-center justify-center p-12 text-center text-blue-700 bg-blue-50 border-blue-200">
                     <CheckCircle2 className="h-16 w-16 mb-4 text-blue-600" />
                     <h3 className="font-headline text-xl font-bold mb-2">您已經訂購過此訂單</h3>
@@ -1099,7 +1111,7 @@ export function OrderClient({
                         vendorName={selectedOrder.vendor.vendorName} 
                         vendorId={selectedOrder.vendor.vendorId}
                         onAddToOrder={handleAddToOrder} 
-                        disabled={hasExistingOrder && !isEditMode}
+                        disabled={isPastDeadline}
                       />
                     )) : (
                       <p className="text-sm text-muted-foreground col-span-full">這個店家還沒有任何菜單品項，請管理者新增。</p>
@@ -1129,50 +1141,81 @@ export function OrderClient({
                   notes
                 })));
               }}
-              isEditMode={isEditMode || !!editingOrderId}
-              disabled={isPastDeadline}
+              isEditMode={isEditMode || !!editingOrderId || isEditing}
+              disabled={isPastDeadline && !isEditing}
               hasSubmitted={isOrderSubmitted}
               onEdit={() => {
-                // 啟用編輯模式
-                if (selectedOrder) {
-                  router.push(`/order/${selectedOrder.id}/edit?username=${encodeURIComponent(username)}`);
-                }
+                // 切換編輯模式
+                setIsEditing(!isEditing);
               }}
-              onDelete={async () => {
-                if (!selectedOrder || !window.confirm('確定要刪除此訂單嗎？此操作無法復原。')) {
-                  return;
-                }
-                try {
-                  // 調用刪除訂單的 API
-                  await deleteUserOrder({ dailyOrderId: selectedOrder.id, username });
-                  toast({
-                    title: "訂單已刪除",
-                    description: `已成功刪除 ${selectedOrder.vendor.vendorName} 的訂單`,
-                    variant: "default"
-                  });
-                  // 重置訂單狀態
-                  setOrder([]);
-                  setHasExistingOrder(false);
-                  setIsOrderSubmitted(false);
-                  setEditingOrderId(null);
-                  
-                  // 如果是在編輯模式，則返回訂單列表
-                  if (isEditMode || editingOrderId) {
-                    router.push(`/order?username=${encodeURIComponent(username)}`);
-                  }
-                } catch (error) {
-                  console.error("刪除訂單時出錯:", error);
-                  toast({
-                    variant: "destructive",
-                    title: "刪除訂單失敗",
-                    description: error instanceof Error ? error.message : "請稍後再試"
-                  });
+              onDelete={() => {
+                if (selectedOrder) {
+                  setShowDeleteConfirm(true);
                 }
               }}
             />
           </div>
         </aside>
       </div>
+
+      {/* 刪除確認對話框 */}
+      {showDeleteConfirm && selectedOrder && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-background rounded-lg p-6 w-full max-w-md">
+            <div className="flex items-center gap-3 mb-4">
+              <AlertTriangle className="h-6 w-6 text-destructive" />
+              <h3 className="text-lg font-semibold">確認刪除訂單</h3>
+            </div>
+            <p className="text-muted-foreground mb-6">
+              確定要刪除 {selectedOrder.vendor.vendorName} 的訂單嗎？此操作無法復原。
+            </p>
+            <div className="flex justify-end gap-3">
+              <Button 
+                variant="outline" 
+                onClick={() => setShowDeleteConfirm(false)}
+              >
+                取消
+              </Button>
+              <Button 
+                variant="destructive"
+                onClick={async () => {
+                  try {
+                    // 調用刪除訂單的 API
+                    await deleteUserOrder({ dailyOrderId: selectedOrder.id, username });
+                    toast({
+                      title: "訂單已刪除",
+                      description: `已成功刪除 ${selectedOrder.vendor.vendorName} 的訂單`,
+                      variant: "default"
+                    });
+                    // 重置訂單狀態
+                    setOrder([]);
+                    setHasExistingOrder(false);
+                    setIsOrderSubmitted(false);
+                    setEditingOrderId(null);
+                    setShowDeleteConfirm(false);
+                    
+                    // 如果是在編輯模式，則返回訂單列表
+                    if (isEditMode || editingOrderId) {
+                      router.push(`/order?username=${encodeURIComponent(username)}`);
+                    }
+                  } catch (error) {
+                    console.error("刪除訂單時出錯:", error);
+                    toast({
+                      variant: "destructive",
+                      title: "刪除訂單失敗",
+                      description: error instanceof Error ? error.message : "請稍後再試"
+                    });
+                  } finally {
+                    setShowDeleteConfirm(false);
+                  }
+                }}
+              >
+                確認刪除
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
